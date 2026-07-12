@@ -504,6 +504,16 @@ void WMainMenuBar::initialize() {
     connect(pOptionsPreferences, &QAction::triggered, this, &WMainMenuBar::showPreferences);
     pOptionsMenu->addAction(pOptionsPreferences);
 
+#ifdef MIXXX_MUSIC_SYNC_ENABLED
+    QString musicSyncTitle = tr("&Music Sync");
+    QString musicSyncText = tr("Open the Music Sync assistant");
+    auto* pOptionsMusicSync = new QAction(musicSyncTitle, this);
+    pOptionsMusicSync->setStatusTip(musicSyncText);
+    pOptionsMusicSync->setWhatsThis(buildWhatsThis(musicSyncTitle, musicSyncText));
+    connect(pOptionsMusicSync, &QAction::triggered, this, &WMainMenuBar::showMusicSync);
+    pOptionsMenu->addAction(pOptionsMusicSync);
+#endif
+
     addMenu(pOptionsMenu);
 
     // DEVELOPER MENU

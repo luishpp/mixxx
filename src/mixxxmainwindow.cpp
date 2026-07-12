@@ -26,6 +26,9 @@
 #include "defs_urls.h"
 #include "dialog/dlgabout.h"
 #include "dialog/dlgdevelopertools.h"
+#ifdef MIXXX_MUSIC_SYNC_ENABLED
+#include "music_sync/dlg_music_sync.h"
+#endif
 #include "dialog/dlgkeywheel.h"
 #include "moc_mixxxmainwindow.cpp"
 #include "preferences/dialog/dlgpreferences.h"
@@ -105,6 +108,9 @@ MixxxMainWindow::MixxxMainWindow(std::shared_ptr<mixxx::CoreServices> pCoreServi
 #endif
           m_inRebootMixxxView(false),
           m_pDeveloperToolsDlg(nullptr),
+#ifdef MIXXX_MUSIC_SYNC_ENABLED
+          m_pMusicSyncDlg(nullptr),
+#endif
           m_pPrefDlg(nullptr),
           m_toolTipsCfg(mixxx::preferences::Tooltips::On) {
     DEBUG_ASSERT(pCoreServices);
@@ -869,6 +875,13 @@ void MixxxMainWindow::connectMenuBar() {
             this,
             &MixxxMainWindow::slotDeveloperTools,
             Qt::UniqueConnection);
+#ifdef MIXXX_MUSIC_SYNC_ENABLED
+    connect(m_pMenuBar,
+            &WMainMenuBar::showMusicSync,
+            this,
+            &MixxxMainWindow::slotMusicSync,
+            Qt::UniqueConnection);
+#endif
 
     if (m_pCoreServices->getRecordingManager()) {
         connect(m_pCoreServices->getRecordingManager().get(),
@@ -1196,6 +1209,20 @@ void MixxxMainWindow::slotHelpAbout() {
     DlgAbout* about = new DlgAbout;
     about->show();
 }
+
+#ifdef MIXXX_MUSIC_SYNC_ENABLED
+void MixxxMainWindow::slotMusicSync() {
+    if (m_pMusicSyncDlg == nullptr) {
+        // Parented to the main window; created lazily so nothing touches the
+        // sidecar until the user opens the panel.
+        m_pMusicSyncDlg = new mixxx::music_sync::DlgMusicSync(
+                this, m_pCoreServices->getSettings());
+    }
+    m_pMusicSyncDlg->show();
+    m_pMusicSyncDlg->raise();
+    m_pMusicSyncDlg->activateWindow();
+}
+#endif
 
 void MixxxMainWindow::slotShowKeywheel(bool toggle) {
     if (!m_pKeywheel) {

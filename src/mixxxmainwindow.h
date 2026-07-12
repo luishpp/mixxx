@@ -18,6 +18,14 @@ class LaunchImage;
 class VisualsManager;
 class WMainMenuBar;
 
+#ifdef MIXXX_MUSIC_SYNC_ENABLED
+namespace mixxx {
+namespace music_sync {
+class DlgMusicSync;
+} // namespace music_sync
+} // namespace mixxx
+#endif
+
 namespace mixxx {
 
 class CoreServices;
@@ -69,6 +77,10 @@ class MixxxMainWindow : public QMainWindow {
     void slotViewFullScreen(bool toggle);
     /// open the developer tools dialog.
     void slotDeveloperTools(bool enable);
+#ifdef MIXXX_MUSIC_SYNC_ENABLED
+    /// open the Music Sync assistant dialog.
+    void slotMusicSync();
+#endif
     void slotDeveloperToolsClosed();
 
     void slotUpdateWindowTitle(TrackPointer pTrack);
@@ -145,6 +157,9 @@ class MixxxMainWindow : public QMainWindow {
     bool m_inRebootMixxxView;
 
     DlgDeveloperTools* m_pDeveloperToolsDlg;
+#ifdef MIXXX_MUSIC_SYNC_ENABLED
+    mixxx::music_sync::DlgMusicSync* m_pMusicSyncDlg;
+#endif
 
     DlgPreferences* m_pPrefDlg;
     parented_ptr<DlgKeywheel> m_pKeywheel;

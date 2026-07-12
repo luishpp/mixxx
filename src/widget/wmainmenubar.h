@@ -71,6 +71,9 @@ class WMainMenuBar : public QMenuBar {
     void showAbout();
     void showKeywheel(bool visible);
     void showPreferences();
+#ifdef MIXXX_MUSIC_SYNC_ENABLED
+    void showMusicSync();
+#endif
     void toggleDeveloperTools(bool toggle);
     void toggleFullScreen(bool toggle);
     void toggleKeyboardShortcuts(bool toggle);
