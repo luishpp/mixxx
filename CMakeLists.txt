@@ -3953,6 +3953,35 @@ if(VINYLCONTROL)
   target_link_libraries(mixxx-lib PRIVATE mixxx-xwax)
 endif()
 
+# --- Music Sync DJ assistance module (fork addition) ---
+# Sources are compiled into mixxx-lib only when MUSIC_SYNC_ENABLED is ON (the
+# option, declared near the top of this file, also defines
+# MIXXX_MUSIC_SYNC_ENABLED globally to guard the minimal upstream additions).
+if(MUSIC_SYNC_ENABLED)
+  target_sources(mixxx-lib PRIVATE
+    src/music_sync/feature_flags.h
+    src/music_sync/sidecar_database.h
+    src/music_sync/sidecar_database.cpp
+    src/music_sync/music_sync_controller.h
+    src/music_sync/music_sync_controller.cpp
+    src/music_sync/dlg_music_sync.h
+    src/music_sync/dlg_music_sync.cpp
+  )
+  if(BUILD_TESTING)
+    target_sources(mixxx-test PRIVATE src/test/music_sync_sidecar_test.cpp)
+    # Register with ctest here: the main gtest_add_tests() call runs before this
+    # block, so it would not see a source added afterwards.
+    gtest_add_tests(
+      TARGET mixxx-test
+      SOURCES src/test/music_sync_sidecar_test.cpp
+      EXTRA_ARGS --logLevel info
+      WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+      TEST_LIST musicSyncTestsuite
+    )
+  endif()
+endif()
+# --- end Music Sync DJ ---
+
 # WavPack audio file support
 find_package(wavpack)
 default_option(WAVPACK "WavPack audio file support" "wavpack_FOUND")
