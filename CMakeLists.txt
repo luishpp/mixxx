@@ -166,6 +166,15 @@ option(QT6 "Build with Qt6" ON)
 cmake_dependent_option(QML "Build with QML" ON "QT6" OFF)
 option(QOPENGL "Use QOpenGLWindow based widget instead of QGLWidget" ON)
 
+# --- Music Sync DJ (fork addition) — see docs/music-sync/ ---
+# Feature flag for the mixxx::music_sync assistance module. Default OFF so the
+# baseline Mixxx build/behaviour is unchanged until the module is implemented.
+option(MUSIC_SYNC_ENABLED "Build the Music Sync DJ assistance module (mixxx::music_sync)" OFF)
+if(MUSIC_SYNC_ENABLED)
+  add_compile_definitions(MIXXX_MUSIC_SYNC_ENABLED)
+endif()
+# --- end Music Sync DJ ---
+
 if(QOPENGL)
   add_compile_definitions(MIXXX_USE_QOPENGL)
 endif()
