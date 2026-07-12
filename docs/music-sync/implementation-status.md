@@ -15,8 +15,24 @@ Progresso real do Music Sync DJ (fork do Mixxx 2.5.6). Atualizar a cada etapa re
 
 Comandos de build validados em `building-windows.md`. Baseline documentada em `upstream-baseline.md`.
 
+## Fase 1 — Esqueleto do módulo ✅ (2026-07-12)
+- [x] Módulo `src/music_sync/` (namespace `mixxx::music_sync`), compilado em `mixxx-lib` só com `MUSIC_SYNC_ENABLED=ON`:
+  - `feature_flags.h`, `sidecar_database.{h,cpp}`, `music_sync_controller.{h,cpp}`, `dlg_music_sync.{h,cpp}`.
+- [x] **Sidecar SQLite** (`music-sync-dj.sqlite` no dir de config do Mixxx), conexão dedicada `"MUSIC_SYNC"`,
+  tabelas `MusicSyncSchemaMigrations` + `MusicSyncSettings`, migração v1 com versionamento próprio; falha isolada (não derruba o Mixxx).
+- [x] **Painel** *Options → Music Sync* (diálogo mínimo: status do sidecar + um setting persistido).
+- [x] Edições upstream mínimas e guardadas por `#ifdef MIXXX_MUSIC_SYNC_ENABLED` (CMake + `wmainmenubar.{h,cpp}` + `mixxxmainwindow.{h,cpp}`) — ver ADR-0002.
+- [x] **Build OFF** (default): baseline compila/linka idêntica (verificado).
+- [x] **Build ON**: `mixxx.exe` + `mixxx-test.exe` compilam e linkam.
+- [x] **Teste** `MusicSyncSidecarDatabaseTest.MigratesAndPersistsSettings` passa (migração idempotente + persistência de settings).
+- [ ] (Interativo — usuário) Abrir *Options → Music Sync*, marcar o checkbox e reabrir para confirmar o setting salvo, sem afetar a reprodução.
+
+Nota de build: reconfigurar OFF→ON no mesmo diretório exige forçar o AUTOMOC a re-parsear
+(remover `mixxx-lib_autogen/timestamp` e `ParseCache.txt`); um diretório de build limpo evita isso.
+
 ## Próximas fases (roadmap)
-- **Fase 1** — Esqueleto do módulo `src/music_sync/`, controller, painel/diálogo vazio atrás da flag, sidecar SQLite + 1ª migration, desativação segura.
+- **Fase 1** — ✅ concluída (acima).
+- **Fase 2** — Adaptação da análise nativa (ler BPM/beats/key/waveform/ReplayGain/cues do Mixxx; snapshot no sidecar).
 - **Fase 2** — Adaptação da análise nativa (ler BPM/beats/key/waveform/ReplayGain/cues do Mixxx; snapshot no sidecar).
 - **Fase 3** — Análise avançada mínima (energia, frases heurísticas, seções, graves, janelas de transição).
 - **Fase 4** — Motor de sequência (Camelot, pair score versionado, otimizador, ≥3 alternativas, explicações; curadoria **híbrida**: âncoras dos atos travadas + otimização do restante).
