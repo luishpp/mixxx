@@ -69,9 +69,18 @@ Nota de build: reconfigurar OFF→ON no mesmo diretório exige forçar o AUTOMOC
 - Persistência do plano de transição e edição manual ficam como refinamento; o executor real chega na Fase 6.
 - [ ] (Interativo — usuário) *Generate sequence* e conferir os tipos de transição sugeridos entre faixas (EQ/Bass Swap para pares harmônicos, Cut para saltos de tempo/tom).
 
+## Fase 6 — Prévia em dois decks ✅ (2026-07-13) — 1º marco técnico (spec §28)
+- [x] **Programa de prévia compilado** (`domain/preview_program.h` + `planner/preview_compiler.{h,cpp}`): compila o `TransitionPlan` numa timeline determinística de `ControlWrite` (ações instantâneas viram 1 write; rampas são discretizadas a 1/16 de compasso), ordenada por beat. **Puro/serializável** (spec §20/§28.14), sem tocar no motor. Testado (`music_sync_preview_test.cpp`): expansão de rampa, merge+ordenação de ações/rampas, rampa de duração zero, cópia de metadados. **ctest do módulo: 26/26 verdes.**
+- [x] **`PreviewExecutor`** (`preview/preview_executor.{h,cpp}`, QObject na thread da GUI): dirige **dois decks reais** só por `ControlProxy` (thread-safe, nada pesado no áudio — RNF-002). Nomes de controles confirmados na baseline 2.5.6: deck `[ChannelN]` (`play`, `playposition` p/ ler posição e dar seek, `bpm`, `sync_enabled`, `volume`, `orientation`), EQ grave `[EqualizerRack1_[ChannelN]_Effect1],parameter1`, filtro `[QuickEffectRack1_[ChannelN]],super1`, crossfader `[Master],crossfader`; carga via `PlayerManager::slotLoadTrackToPlayer`. Fluxo: carrega o par → espera `track_samples>0` → cue (posições planejadas, orientação A=esq/B=dir, grave de B zerado) → beat-match (`sync_enabled` no B) → executa a automação **guiada pela `playposition` do deck A** (QTimer só amostra a posição — spec §21.3, eventos musicais seguem o playback, não o relógio) → conclui devolvendo os decks ao usuário.
+- [x] **Repetir / cancelar / devolver decks / ManualOverride**: `repeat()` re-cue+reexecuta; `cancel()` para a automação sem cortar o áudio; ao terminar/cancelar, `handControlsToUser()` reseta EQ/orientação/volumes/sync; mover o crossfader durante a prévia dispara `ManualOverride` e cede o controle (spec §21.4/RF-013).
+- [x] **UI**: no diálogo *Generate sequence*, seletor de par consecutivo + botões **Preview on decks / Repeat / Cancel preview** e rótulo de estado (Loading/Transitioning/Completed/Cancelled/ManualOverride/Failed). Controller: `previewTransition()` (plano→compila→resolve faixas→executa), `repeatPreview()`, `cancelPreview()`, sinal `previewStateChanged`.
+- [x] **Build**: `mixxx-lib` + `mixxx-test` + **`mixxx.exe` linkam com a Fase 6** (feature ON).
+- Critério de saída é **auditivo** (ouvir uma transição de 32 compassos sem intervenção): o núcleo compilado está testado; a execução no motor exige rodar a GUI com 2 decks e faixas analisadas.
+- [ ] (Interativo — usuário) *Generate sequence* → escolher um par → **Preview on decks** e ouvir a transição de ~32 compassos (critério de saída da Fase 6). Ajustar `preferredTransitionBars`/tolerância se necessário.
+
 ## Próximas fases (roadmap)
-- **Fase 1, 2, 3, 4, 5** — ✅ concluídas (acima).
-- **Fase 6** — Prévia em dois decks (1º marco técnico: transição automática de 32 compassos entre 2 faixas), consumindo o `TransitionPlan`.
+- **Fase 1, 2, 3, 4, 5, 6** — ✅ concluídas (acima).
+- **Fase 7** — Executor de mini-set (máquina de estados completa, fila inteligente, preparo da próxima faixa, automações encadeadas, pause/resume/skip/cancel, ManualOverride, eventos): executar 5 faixas continuamente.
 - **Fase 7** — Executor de mini-set (máquina de estados, fila, automações, ManualOverride).
 - **Fase 8** — Gravação e relatórios (WAV master via Mixxx, tracklist, session-report). **→ set de 35 faixas executável e gravável.**
 - **Fase 9–10** — Worker Python opcional; Echo Out/loop-out; stems; LLM de intenção; render offline.

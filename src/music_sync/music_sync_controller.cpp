@@ -4,6 +4,7 @@
 #include <QSqlQuery>
 #include <QSqlRecord>
 #include <QThread>
+#include <QVariant>
 #include <algorithm>
 
 #include "analyzer/analyzerprogress.h"
@@ -13,10 +14,14 @@
 #include "library/library.h"
 #include "library/trackcollection.h"
 #include "library/trackcollectionmanager.h"
+#include "mixer/playermanager.h"
 #include "music_sync/analysis/advanced_analysis_adapter.h"
 #include "music_sync/analysis/analysis_repository.h"
 #include "music_sync/analysis/native_analysis_adapter.h"
+#include "music_sync/planner/preview_compiler.h"
 #include "music_sync/planner/sequence_optimizer.h"
+#include "music_sync/planner/transition_planner.h"
+#include "music_sync/preview/preview_executor.h"
 #include "music_sync/sidecar_database.h"
 #include "preferences/usersettings.h"
 #include "track/track.h"
@@ -247,6 +252,62 @@ int MusicSyncController::analyzeMissing(int limit) {
     }
     kLogger.info() << "Scheduled" << scheduled << "tracks for native analysis";
     return scheduled;
+}
+
+bool MusicSyncController::previewTransition(
+        const TrackFeatures& from, const TrackFeatures& to, const MixIntent& intent) {
+    if (!m_pCoreServices) {
+        return false;
+    }
+    const std::shared_ptr<PlayerManager> pPlayerManager =
+            m_pCoreServices->getPlayerManager();
+    const std::shared_ptr<TrackCollectionManager> pTrackCollectionManager =
+            m_pCoreServices->getTrackCollectionManager();
+    if (!pPlayerManager || !pTrackCollectionManager) {
+        return false;
+    }
+    if (pPlayerManager->numberOfDecks() < 2) {
+        kLogger.warning() << "Need at least two decks for a transition preview";
+        return false;
+    }
+    const TrackPointer pSource = pTrackCollectionManager->getTrackById(
+            TrackId(QVariant(static_cast<qlonglong>(from.mixxxTrackId))));
+    const TrackPointer pTarget = pTrackCollectionManager->getTrackById(
+            TrackId(QVariant(static_cast<qlonglong>(to.mixxxTrackId))));
+    if (!pSource || !pTarget) {
+        kLogger.warning() << "Could not resolve source/target tracks for preview";
+        return false;
+    }
+
+    const TransitionPlan plan = TransitionPlanner::plan(from, to, intent);
+    const PreviewProgram program = PreviewCompiler::compile(plan);
+
+    if (!m_pPreviewExecutor) {
+        m_pPreviewExecutor = std::make_unique<PreviewExecutor>(
+                pPlayerManager, /*source deck*/ 0, /*target deck*/ 1, this);
+        connect(m_pPreviewExecutor.get(),
+                &PreviewExecutor::stateChanged,
+                this,
+                &MusicSyncController::previewStateChanged);
+    }
+    m_pPreviewExecutor->preview(program,
+            pSource,
+            pTarget,
+            static_cast<double>(from.durationMs),
+            static_cast<double>(to.durationMs));
+    return true;
+}
+
+void MusicSyncController::repeatPreview() {
+    if (m_pPreviewExecutor) {
+        m_pPreviewExecutor->repeat();
+    }
+}
+
+void MusicSyncController::cancelPreview() {
+    if (m_pPreviewExecutor) {
+        m_pPreviewExecutor->cancel();
+    }
 }
 
 } // namespace mixxx::music_sync

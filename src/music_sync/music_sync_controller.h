@@ -17,6 +17,7 @@ class CoreServices;
 namespace mixxx::music_sync {
 
 class SidecarDatabase;
+class PreviewExecutor;
 
 /// Entry point / lifecycle owner of the Music Sync module. It opens the sidecar
 /// database, runs migrations, reads native track analysis from the Mixxx
@@ -71,15 +72,31 @@ class MusicSyncController : public QObject {
         return static_cast<bool>(m_pScheduler);
     }
 
+    // --- Fase 6: two-deck transition preview ---
+
+    /// Plans and previews the transition from `from` to `to` on the real decks
+    /// (deck 1 = source, deck 2 = target). Returns false if the tracks or deck
+    /// controls are unavailable. Progress is reported via previewStateChanged().
+    bool previewTransition(
+            const TrackFeatures& from, const TrackFeatures& to, const MixIntent& intent);
+
+    /// Runs the last previewed transition again.
+    void repeatPreview();
+
+    /// Stops the preview automation and hands the decks back to the user.
+    void cancelPreview();
+
   signals:
     void analysisProgress(int currentTrackNumber, int totalTracks);
     void analysisFinished();
+    void previewStateChanged(int state, const QString& message);
 
   private:
     std::shared_ptr<mixxx::CoreServices> m_pCoreServices;
     std::unique_ptr<SidecarDatabase> m_pDatabase;
     bool m_ready;
     TrackAnalysisScheduler::Pointer m_pScheduler;
+    std::unique_ptr<PreviewExecutor> m_pPreviewExecutor;
 };
 
 } // namespace mixxx::music_sync

@@ -50,6 +50,27 @@ QString replayGainText(double ratio) {
 QString dashIfEmpty(const QString& text) {
     return text.isEmpty() ? QStringLiteral("—") : text;
 }
+
+// Mirrors mixxx::music_sync::PreviewExecutor::State (kept as int to avoid
+// coupling the panel to the engine-facing executor header).
+QString previewStateText(int state) {
+    switch (state) {
+    case 1:
+        return QObject::tr("Loading");
+    case 2:
+        return QObject::tr("Transitioning");
+    case 3:
+        return QObject::tr("Completed");
+    case 4:
+        return QObject::tr("Cancelled");
+    case 5:
+        return QObject::tr("Manual override");
+    case 6:
+        return QObject::tr("Failed");
+    default:
+        return QObject::tr("Idle");
+    }
+}
 } // anonymous namespace
 
 namespace mixxx::music_sync {
@@ -269,16 +290,80 @@ void DlgMusicSync::slotGenerateSequence() {
 
     QDialog dialog(this);
     dialog.setWindowTitle(tr("Generated sequence"));
-    dialog.resize(760, 560);
+    dialog.resize(760, 620);
     auto* layout = new QVBoxLayout(&dialog);
     auto* view = new QPlainTextEdit(&dialog);
     view->setReadOnly(true);
     view->setPlainText(report);
     layout->addWidget(view);
+
+    // --- Fase 6: two-deck preview of a chosen consecutive pair ---
+    auto* previewRow = new QHBoxLayout();
+    auto* pairSelector = new QComboBox(&dialog);
+    for (int i = 0; i + 1 < best.items.size(); ++i) {
+        const TrackFeatures a = byId.value(best.items.at(i).mixxxTrackId);
+        const TrackFeatures b = byId.value(best.items.at(i + 1).mixxxTrackId);
+        pairSelector->addItem(
+                QStringLiteral("%1 → %2").arg(
+                        a.title.isEmpty() ? dashIfEmpty(a.artist) : a.title,
+                        b.title.isEmpty() ? dashIfEmpty(b.artist) : b.title),
+                i);
+    }
+    auto* previewButton = new QPushButton(tr("Preview on decks"), &dialog);
+    auto* repeatButton = new QPushButton(tr("Repeat"), &dialog);
+    auto* stopButton = new QPushButton(tr("Cancel preview"), &dialog);
+    previewRow->addWidget(pairSelector, 1);
+    previewRow->addWidget(previewButton);
+    previewRow->addWidget(repeatButton);
+    previewRow->addWidget(stopButton);
+    layout->addLayout(previewRow);
+    auto* previewStatus = new QLabel(
+            tr("Loads deck 1 = A and deck 2 = B, beat-matches and runs the transition."),
+            &dialog);
+    previewStatus->setWordWrap(true);
+    layout->addWidget(previewStatus);
+
+    const bool canPreview = pairSelector->count() > 0;
+    previewButton->setEnabled(canPreview);
+    repeatButton->setEnabled(canPreview);
+    stopButton->setEnabled(canPreview);
+
+    connect(previewButton,
+            &QPushButton::clicked,
+            &dialog,
+            [this, pairSelector, &best, &byId, intent, previewStatus]() {
+                const int i = pairSelector->currentData().toInt();
+                if (i < 0 || i + 1 >= best.items.size()) {
+                    return;
+                }
+                const TrackFeatures from = byId.value(best.items.at(i).mixxxTrackId);
+                const TrackFeatures to = byId.value(best.items.at(i + 1).mixxxTrackId);
+                if (!m_pController->previewTransition(from, to, intent)) {
+                    previewStatus->setText(tr(
+                            "Preview unavailable — need at least two decks and both "
+                            "tracks in the library."));
+                }
+            });
+    connect(repeatButton, &QPushButton::clicked, &dialog, [this]() {
+        m_pController->repeatPreview();
+    });
+    connect(stopButton, &QPushButton::clicked, &dialog, [this]() {
+        m_pController->cancelPreview();
+    });
+    connect(m_pController,
+            &MusicSyncController::previewStateChanged,
+            &dialog,
+            [previewStatus](int state, const QString& message) {
+                previewStatus->setText(
+                        previewStateText(state) + QStringLiteral(" — ") + message);
+            });
+
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::accept);
     layout->addWidget(buttons);
     dialog.exec();
+    // Stop any running automation if the user closes the dialog mid-preview.
+    m_pController->cancelPreview();
 
     m_pSummaryLabel->setText(
             tr("Generated %1 sequence alternative(s).").arg(arrangements.size()));
