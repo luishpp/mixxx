@@ -30,10 +30,19 @@ Comandos de build validados em `building-windows.md`. Baseline documentada em `u
 Nota de build: reconfigurar OFF→ON no mesmo diretório exige forçar o AUTOMOC a re-parsear
 (remover `mixxx-lib_autogen/timestamp` e `ParseCache.txt`); um diretório de build limpo evita isso.
 
+## Fase 2 — Adaptação da análise nativa ✅ (2026-07-12)
+- [x] `NativeAnalysisAdapter` (`analysis/`): lê BPM, key, beatgrid, ReplayGain, intro/outro (cues) e stream info de um `Track` do Mixxx para um `TrackFeatures`. **Camelot via `KeyUtils::keyToString(key, Lancelot)`** (reuso do Mixxx, sem tabela própria). Detecção de "precisa análise" espelhando o gate do Mixxx.
+- [x] `TrackFeatures` (`domain/`) e `AnalysisRepository` (`analysis/`): persistência no sidecar.
+- [x] **Migration v2**: tabela `MusicSyncTrackFeatures` (snapshot por `mixxx_track_id`).
+- [x] Controller passou a receber `CoreServices`; `snapshotLibrary(limit)` lê faixas da biblioteca (`getTrackCollectionManager()` + query `library`), extrai e grava snapshots; `loadSnapshots()`/`snapshotCount()`.
+- [x] Painel: tabela (Artista, Título, BPM, Camelot, Key, Duração, ReplayGain, Analisado) + botões "ler análise nativa" e "recarregar".
+- [x] **Build ON** OK; **testes** `MusicSyncSidecarDatabaseTest` (agora valida migração v2) e `MusicSyncAnalysisRepositoryTest` passam (2/2).
+- [x] OFF intacto por construção: única mudança upstream é uma linha dentro do `#ifdef` de `slotMusicSync` (passa `CoreServices` em vez de `getSettings()`).
+- [ ] (Interativo — usuário) Abrir *Options → Music Sync*, clicar "ler análise nativa da biblioteca" e conferir ~20 faixas com BPM/Camelot/duração/status consistentes.
+- Pendente (Fase 2b): comando "analisar faltantes" via `Library::createTrackAnalysisScheduler` (detecção de faltantes já implementada em `NativeAnalysisAdapter::needsAnalysis`).
+
 ## Próximas fases (roadmap)
-- **Fase 1** — ✅ concluída (acima).
-- **Fase 2** — Adaptação da análise nativa (ler BPM/beats/key/waveform/ReplayGain/cues do Mixxx; snapshot no sidecar).
-- **Fase 2** — Adaptação da análise nativa (ler BPM/beats/key/waveform/ReplayGain/cues do Mixxx; snapshot no sidecar).
+- **Fase 1 e 2** — ✅ concluídas (acima).
 - **Fase 3** — Análise avançada mínima (energia, frases heurísticas, seções, graves, janelas de transição).
 - **Fase 4** — Motor de sequência (Camelot, pair score versionado, otimizador, ≥3 alternativas, explicações; curadoria **híbrida**: âncoras dos atos travadas + otimização do restante).
 - **Fase 5** — Planejador de transições (plano declarativo: crossfade, EQ Blend, Bass Swap, Cut em frase; fallback Auto DJ).
