@@ -1,33 +1,49 @@
 #pragma once
 
 #include <QDialog>
+#include <QVector>
+#include <memory>
 
-#include "preferences/usersettings.h"
+#include "music_sync/domain/track_features.h"
+
+namespace mixxx {
+class CoreServices;
+}
 
 class QCheckBox;
 class QLabel;
+class QPushButton;
+class QTableWidget;
 
 namespace mixxx::music_sync {
 
 class MusicSyncController;
 
-/// Minimal Music Sync panel (Fase 1). It initializes the module, shows the
-/// sidecar status and lets the user toggle a persisted module setting. It is
-/// non-modal and does not touch the audio engine.
+/// Music Sync panel. It initializes the module and shows a table of native
+/// analysis snapshots (BPM, Camelot, key, duration, ReplayGain, analyzed
+/// status) read from the Mixxx library. Non-modal; never touches the audio
+/// engine.
 class DlgMusicSync : public QDialog {
     Q_OBJECT
   public:
-    DlgMusicSync(QWidget* pParent, UserSettingsPointer pConfig);
+    DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices> pCoreServices);
     ~DlgMusicSync() override = default;
 
   private slots:
     void slotModuleEnabledToggled(bool checked);
+    void slotSnapshotLibrary();
+    void slotReloadSnapshots();
 
   private:
-    // Owned via Qt parent/child (parented to this dialog).
+    void populateTable(const QVector<TrackFeatures>& rows);
+
     MusicSyncController* m_pController;
     QLabel* m_pStatusLabel;
     QCheckBox* m_pEnabledCheckBox;
+    QPushButton* m_pSnapshotButton;
+    QPushButton* m_pReloadButton;
+    QTableWidget* m_pTable;
+    QLabel* m_pSummaryLabel;
 };
 
 } // namespace mixxx::music_sync

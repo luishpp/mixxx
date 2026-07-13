@@ -110,6 +110,9 @@ bool SidecarDatabase::applyMigrations() {
         case 1:
             ok = migrateToV1();
             break;
+        case 2:
+            ok = migrateToV2();
+            break;
         default:
             kLogger.warning() << "No migration defined for version" << version;
             ok = false;
@@ -152,6 +155,39 @@ bool SidecarDatabase::migrateToV1() {
             QStringLiteral("CREATE TABLE IF NOT EXISTS MusicSyncSettings ("
                            "  key TEXT PRIMARY KEY,"
                            "  value TEXT"
+                           ")"));
+}
+
+bool SidecarDatabase::migrateToV2() {
+    // Snapshot of each track's native (Mixxx-provided) analysis data. Keyed by
+    // the Mixxx library track id; BPM/key/beats remain owned by Mixxx, this is
+    // only a cached snapshot plus our derived fields (Camelot, analyzed flag).
+    return execStatement(m_database,
+            QStringLiteral("CREATE TABLE IF NOT EXISTS MusicSyncTrackFeatures ("
+                           "  mixxx_track_id   INTEGER PRIMARY KEY,"
+                           "  location         TEXT,"
+                           "  file_size        INTEGER,"
+                           "  title            TEXT,"
+                           "  artist           TEXT,"
+                           "  album            TEXT,"
+                           "  genre            TEXT,"
+                           "  duration_ms      INTEGER,"
+                           "  sample_rate      INTEGER,"
+                           "  channels         INTEGER,"
+                           "  bitrate_kbps     INTEGER,"
+                           "  bpm              REAL,"
+                           "  key_chromatic    INTEGER,"
+                           "  key_text         TEXT,"
+                           "  camelot          TEXT,"
+                           "  replaygain_ratio REAL,"
+                           "  has_beatgrid     INTEGER,"
+                           "  intro_start_ms   INTEGER,"
+                           "  intro_end_ms     INTEGER,"
+                           "  outro_start_ms   INTEGER,"
+                           "  outro_end_ms     INTEGER,"
+                           "  analyzed         INTEGER,"
+                           "  analyzer_version TEXT,"
+                           "  snapshot_at      TEXT NOT NULL DEFAULT (datetime('now'))"
                            ")"));
 }
 

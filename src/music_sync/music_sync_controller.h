@@ -2,46 +2,59 @@
 
 #include <QObject>
 #include <QString>
+#include <QVector>
 #include <memory>
 
-#include "preferences/usersettings.h"
+#include "music_sync/domain/track_features.h"
+
+namespace mixxx {
+class CoreServices;
+}
 
 namespace mixxx::music_sync {
 
 class SidecarDatabase;
 
 /// Entry point / lifecycle owner of the Music Sync module. It opens the sidecar
-/// database, runs migrations and exposes simple module settings. Everything it
-/// does is lazy and off the audio thread; a failure only disables the module
-/// and never affects Mixxx playback.
+/// database, runs migrations, reads native track analysis from the Mixxx
+/// library and snapshots it. Everything runs on the GUI thread and off the
+/// audio thread; a failure only disables the module.
 class MusicSyncController : public QObject {
     Q_OBJECT
   public:
-    explicit MusicSyncController(UserSettingsPointer pConfig, QObject* parent = nullptr);
+    explicit MusicSyncController(
+            std::shared_ptr<mixxx::CoreServices> pCoreServices, QObject* parent = nullptr);
     ~MusicSyncController() override;
 
     /// Opens the sidecar database and applies migrations. Returns true when the
-    /// module is ready. Safe to call once; subsequent calls return the cached
-    /// readiness.
+    /// module is ready.
     bool initialize();
 
     bool isReady() const {
         return m_ready;
     }
 
-    /// Absolute path of the sidecar database file (valid after initialize()).
     QString sidecarPath() const;
-
-    /// Current sidecar schema version (0 when unavailable).
     int schemaVersion() const;
 
-    /// Persisted module on/off preference, stored in the sidecar. This is just a
-    /// stored flag for now — it does not yet change any behaviour.
     bool isModuleEnabled() const;
     bool setModuleEnabled(bool enabled);
 
+    // --- Fase 2: native analysis snapshot ---
+
+    /// Reads native analysis data (BPM, key/Camelot, beatgrid, ReplayGain,
+    /// intro/outro, stream info) for up to `limit` tracks from the Mixxx
+    /// library, stores the snapshots in the sidecar and returns them.
+    QVector<TrackFeatures> snapshotLibrary(int limit);
+
+    /// Loads previously stored snapshots from the sidecar.
+    QVector<TrackFeatures> loadSnapshots() const;
+
+    /// Number of snapshots currently stored.
+    int snapshotCount() const;
+
   private:
-    UserSettingsPointer m_pConfig;
+    std::shared_ptr<mixxx::CoreServices> m_pCoreServices;
     std::unique_ptr<SidecarDatabase> m_pDatabase;
     bool m_ready;
 };

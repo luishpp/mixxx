@@ -15,7 +15,7 @@ namespace mixxx::music_sync {
 class SidecarDatabase {
   public:
     /// Latest schema version this build knows how to migrate to.
-    static constexpr int kTargetSchemaVersion = 1;
+    static constexpr int kTargetSchemaVersion = 2;
 
     explicit SidecarDatabase(QString filePath);
     ~SidecarDatabase();
@@ -44,6 +44,12 @@ class SidecarDatabase {
         return m_filePath;
     }
 
+    /// The underlying connection, for repositories that run their own queries.
+    /// Must be used on the same (GUI) thread that opened it.
+    QSqlDatabase database() const {
+        return m_database;
+    }
+
     /// Reads a value from the MusicSyncSettings key/value table.
     QString getSetting(const QString& key, const QString& defaultValue = QString()) const;
 
@@ -53,6 +59,7 @@ class SidecarDatabase {
 
   private:
     bool migrateToV1();
+    bool migrateToV2();
 
     const QString m_connectionName;
     QString m_filePath;

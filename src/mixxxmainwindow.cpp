@@ -1216,7 +1216,7 @@ void MixxxMainWindow::slotMusicSync() {
         // Parented to the main window; created lazily so nothing touches the
         // sidecar until the user opens the panel.
         m_pMusicSyncDlg = new mixxx::music_sync::DlgMusicSync(
-                this, m_pCoreServices->getSettings());
+                this, m_pCoreServices);
     }
     m_pMusicSyncDlg->show();
     m_pMusicSyncDlg->raise();
