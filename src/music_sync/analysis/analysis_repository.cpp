@@ -1,5 +1,9 @@
 #include "music_sync/analysis/analysis_repository.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QSqlRecord>
@@ -12,6 +16,55 @@ const mixxx::Logger kLogger("music_sync");
 
 QVariant toVariant(const std::optional<std::int64_t>& value) {
     return value ? QVariant(static_cast<qlonglong>(*value)) : QVariant();
+}
+
+QString curveToJson(const QVector<float>& curve) {
+    QJsonArray array;
+    for (float value : curve) {
+        array.append(value);
+    }
+    return QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact));
+}
+
+QVector<float> curveFromJson(const QString& json) {
+    QVector<float> out;
+    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+    if (doc.isArray()) {
+        const QJsonArray array = doc.array();
+        out.reserve(array.size());
+        for (const QJsonValue& value : array) {
+            out.append(static_cast<float>(value.toDouble()));
+        }
+    }
+    return out;
+}
+
+QString phrasesToJson(const QVector<mixxx::music_sync::PhraseMarker>& phrases) {
+    QJsonArray array;
+    for (const mixxx::music_sync::PhraseMarker& phrase : phrases) {
+        QJsonObject obj;
+        obj.insert(QStringLiteral("startMs"), static_cast<double>(phrase.startMs));
+        obj.insert(QStringLiteral("bars"), phrase.bars);
+        array.append(obj);
+    }
+    return QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact));
+}
+
+QVector<mixxx::music_sync::PhraseMarker> phrasesFromJson(const QString& json) {
+    QVector<mixxx::music_sync::PhraseMarker> out;
+    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+    if (doc.isArray()) {
+        const QJsonArray array = doc.array();
+        for (const QJsonValue& value : array) {
+            const QJsonObject obj = value.toObject();
+            mixxx::music_sync::PhraseMarker phrase;
+            phrase.startMs =
+                    static_cast<std::int64_t>(obj.value(QStringLiteral("startMs")).toDouble());
+            phrase.bars = obj.value(QStringLiteral("bars")).toInt();
+            out.append(phrase);
+        }
+    }
+    return out;
 }
 
 std::optional<std::int64_t> readOptionalMs(const QSqlQuery& query, int index) {
@@ -55,6 +108,11 @@ mixxx::music_sync::TrackFeatures readRow(const QSqlQuery& query) {
     f.outroEndMs = readOptionalMs(query, idx("outro_end_ms"));
     f.analyzed = query.value(idx("analyzed")).toInt() != 0;
     f.analyzerVersion = query.value(idx("analyzer_version")).toString();
+    f.overallEnergy = query.value(idx("overall_energy")).toDouble();
+    f.energyCurve = curveFromJson(query.value(idx("energy_curve")).toString());
+    f.bassCurve = curveFromJson(query.value(idx("bass_curve")).toString());
+    f.phrases = phrasesFromJson(query.value(idx("phrase_markers")).toString());
+    f.advancedAnalyzerVersion = query.value(idx("advanced_analyzer_version")).toString();
     f.snapshotAt = query.value(idx("snapshot_at")).toString();
     return f;
 }
@@ -64,7 +122,8 @@ const QString kSelectColumns = QStringLiteral(
         "duration_ms, sample_rate, channels, bitrate_kbps, bpm, key_chromatic, "
         "key_text, camelot, replaygain_ratio, has_beatgrid, intro_start_ms, "
         "intro_end_ms, outro_start_ms, outro_end_ms, analyzed, analyzer_version, "
-        "snapshot_at");
+        "overall_energy, energy_curve, bass_curve, phrase_markers, "
+        "advanced_analyzer_version, snapshot_at");
 } // anonymous namespace
 
 namespace mixxx::music_sync {
@@ -81,13 +140,15 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
             "  duration_ms, sample_rate, channels, bitrate_kbps, bpm, key_chromatic,"
             "  key_text, camelot, replaygain_ratio, has_beatgrid, intro_start_ms,"
             "  intro_end_ms, outro_start_ms, outro_end_ms, analyzed, analyzer_version,"
-            "  snapshot_at) "
+            "  overall_energy, energy_curve, bass_curve, phrase_markers,"
+            "  advanced_analyzer_version, snapshot_at) "
             "VALUES ("
             "  :id, :location, :file_size, :title, :artist, :album, :genre,"
             "  :duration_ms, :sample_rate, :channels, :bitrate_kbps, :bpm, :key_chromatic,"
             "  :key_text, :camelot, :replaygain_ratio, :has_beatgrid, :intro_start_ms,"
             "  :intro_end_ms, :outro_start_ms, :outro_end_ms, :analyzed, :analyzer_version,"
-            "  datetime('now')) "
+            "  :overall_energy, :energy_curve, :bass_curve, :phrase_markers,"
+            "  :advanced_analyzer_version, datetime('now')) "
             "ON CONFLICT(mixxx_track_id) DO UPDATE SET "
             "  location=excluded.location, file_size=excluded.file_size, title=excluded.title,"
             "  artist=excluded.artist, album=excluded.album, genre=excluded.genre,"
@@ -98,7 +159,11 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
             "  has_beatgrid=excluded.has_beatgrid, intro_start_ms=excluded.intro_start_ms,"
             "  intro_end_ms=excluded.intro_end_ms, outro_start_ms=excluded.outro_start_ms,"
             "  outro_end_ms=excluded.outro_end_ms, analyzed=excluded.analyzed,"
-            "  analyzer_version=excluded.analyzer_version, snapshot_at=excluded.snapshot_at"));
+            "  analyzer_version=excluded.analyzer_version,"
+            "  overall_energy=excluded.overall_energy, energy_curve=excluded.energy_curve,"
+            "  bass_curve=excluded.bass_curve, phrase_markers=excluded.phrase_markers,"
+            "  advanced_analyzer_version=excluded.advanced_analyzer_version,"
+            "  snapshot_at=excluded.snapshot_at"));
 
     query.bindValue(QStringLiteral(":id"), static_cast<qlonglong>(f.mixxxTrackId));
     query.bindValue(QStringLiteral(":location"), f.location);
@@ -123,6 +188,11 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
     query.bindValue(QStringLiteral(":outro_end_ms"), toVariant(f.outroEndMs));
     query.bindValue(QStringLiteral(":analyzed"), f.analyzed ? 1 : 0);
     query.bindValue(QStringLiteral(":analyzer_version"), f.analyzerVersion);
+    query.bindValue(QStringLiteral(":overall_energy"), f.overallEnergy);
+    query.bindValue(QStringLiteral(":energy_curve"), curveToJson(f.energyCurve));
+    query.bindValue(QStringLiteral(":bass_curve"), curveToJson(f.bassCurve));
+    query.bindValue(QStringLiteral(":phrase_markers"), phrasesToJson(f.phrases));
+    query.bindValue(QStringLiteral(":advanced_analyzer_version"), f.advancedAnalyzerVersion);
 
     if (!query.exec()) {
         kLogger.warning() << "Could not upsert track features for id" << f.mixxxTrackId

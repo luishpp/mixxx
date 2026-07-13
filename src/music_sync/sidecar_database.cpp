@@ -113,6 +113,9 @@ bool SidecarDatabase::applyMigrations() {
         case 2:
             ok = migrateToV2();
             break;
+        case 3:
+            ok = migrateToV3();
+            break;
         default:
             kLogger.warning() << "No migration defined for version" << version;
             ok = false;
@@ -189,6 +192,28 @@ bool SidecarDatabase::migrateToV2() {
                            "  analyzer_version TEXT,"
                            "  snapshot_at      TEXT NOT NULL DEFAULT (datetime('now'))"
                            ")"));
+}
+
+bool SidecarDatabase::migrateToV3() {
+    // Advanced analysis fields (energy/bass curves + phrase markers), stored as
+    // JSON alongside the native snapshot. Added as columns to preserve v2 rows.
+    for (const QString& statement : {
+                 QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
+                                "ADD COLUMN overall_energy REAL"),
+                 QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
+                                "ADD COLUMN energy_curve TEXT"),
+                 QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
+                                "ADD COLUMN bass_curve TEXT"),
+                 QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
+                                "ADD COLUMN phrase_markers TEXT"),
+                 QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
+                                "ADD COLUMN advanced_analyzer_version TEXT"),
+         }) {
+        if (!execStatement(m_database, statement)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 QString SidecarDatabase::getSetting(const QString& key, const QString& defaultValue) const {

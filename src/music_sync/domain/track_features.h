@@ -1,10 +1,17 @@
 #pragma once
 
 #include <QString>
+#include <QVector>
 #include <cstdint>
 #include <optional>
 
 namespace mixxx::music_sync {
+
+/// A phrase boundary: musical phrases are groups of bars (typically 8/16/32).
+struct PhraseMarker {
+    std::int64_t startMs = 0;
+    int bars = 0;
+};
 
 /// Snapshot of a single track's native (Mixxx-provided) analysis data plus a
 /// few derived fields (Camelot, analyzed flag). BPM/key/beats remain owned by
@@ -45,6 +52,13 @@ struct TrackFeatures {
 
     // Our derived analysis status (matches how Mixxx gates re-analysis).
     bool analyzed = false;
+
+    // --- Fase 3: advanced analysis, derived from the Mixxx waveform + tempo ---
+    double overallEnergy = 0.0;    // mean energy 0..1, comparable across tracks
+    QVector<float> energyCurve;    // per-track normalized energy (0..1)
+    QVector<float> bassCurve;      // per-track normalized bass presence (0..1)
+    QVector<PhraseMarker> phrases; // heuristic phrase boundaries
+    QString advancedAnalyzerVersion;
 
     // Provenance.
     QString analyzerVersion;

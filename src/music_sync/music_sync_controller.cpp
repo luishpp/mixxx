@@ -13,6 +13,7 @@
 #include "library/library.h"
 #include "library/trackcollection.h"
 #include "library/trackcollectionmanager.h"
+#include "music_sync/analysis/advanced_analysis_adapter.h"
 #include "music_sync/analysis/analysis_repository.h"
 #include "music_sync/analysis/native_analysis_adapter.h"
 #include "music_sync/sidecar_database.h"
@@ -134,6 +135,7 @@ QVector<TrackFeatures> MusicSyncController::snapshotLibrary(int limit) {
             continue;
         }
         TrackFeatures features = NativeAnalysisAdapter::extract(pTrack);
+        AdvancedAnalysisAdapter::compute(pTrack, features.durationMs, &features);
         repository.upsert(features);
         result.append(features);
     }

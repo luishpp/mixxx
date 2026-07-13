@@ -41,9 +41,17 @@ Nota de build: reconfigurar OFF→ON no mesmo diretório exige forçar o AUTOMOC
 - [x] **Fase 2b**: botão "Analyze missing (Mixxx)" — `MusicSyncController::analyzeMissing()` dispara a análise nativa do Mixxx via `Library::createTrackAnalysisScheduler` para faixas sem beatgrid/bpm ou sem key; progresso e conclusão refletidos no painel, com re-snapshot ao terminar.
 - [ ] (Interativo — usuário) Abrir *Options → Music Sync*, "ler análise nativa" (conferir ~20 faixas) e "Analyze missing" (rodar a análise do Mixxx para faixas faltantes).
 
+## Fase 3 — Análise avançada mínima — parte 3a ✅ (2026-07-12)
+- [x] `AdvancedAnalysisAdapter`: **curva de energia** e **presença de graves** derivadas do *waveform summary* do Mixxx (bandas low/mid/high; energia = low+mid+high, graves = low), **sem re-decodificar áudio**; curvas normalizadas 0..1 + energia geral comparável entre faixas.
+- [x] **Frases** computadas analiticamente do tempo (firstBeat + BPM, constante — robusto p/ eletrônica); fases de 16 compassos.
+- [x] **Migration v3**: colunas `overall_energy`/`energy_curve`/`bass_curve`/`phrase_markers`/`advanced_analyzer_version` (curvas e frases em JSON) em `MusicSyncTrackFeatures`.
+- [x] O snapshot também computa e grava os campos avançados; painel ganhou colunas **Energy** e **Phrases**.
+- [x] **Testes** do núcleo DSP puro (`computeCurves` bucketização/normalização; `computePhrases` tempo constante + guards). ctest do módulo: **6/6 verdes**.
+- [ ] **Fase 3b** (pendente): seções simples (heurística de energia) + **janelas de transição** entrada/saída (critério de saída da Fase 3) + correção manual.
+
 ## Próximas fases (roadmap)
-- **Fase 1 e 2** — ✅ concluídas (acima).
-- **Fase 3** — Análise avançada mínima (energia, frases heurísticas, seções, graves, janelas de transição).
+- **Fase 1, 2, 3a** — ✅ concluídas (acima).
+- **Fase 3b** — Seções simples + janelas de transição (fecha o critério de saída da Fase 3).
 - **Fase 4** — Motor de sequência (Camelot, pair score versionado, otimizador, ≥3 alternativas, explicações; curadoria **híbrida**: âncoras dos atos travadas + otimização do restante).
 - **Fase 5** — Planejador de transições (plano declarativo: crossfade, EQ Blend, Bass Swap, Cut em frase; fallback Auto DJ).
 - **Fase 6** — Prévia em dois decks (1º marco técnico: transição automática de 32 compassos entre 2 faixas).

@@ -127,10 +127,11 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
 
     // Track table.
     m_pTable = new QTableWidget(this);
-    m_pTable->setColumnCount(8);
+    m_pTable->setColumnCount(10);
     m_pTable->setHorizontalHeaderLabels(QStringList()
             << tr("Artist") << tr("Title") << tr("BPM") << tr("Camelot")
-            << tr("Key") << tr("Duration") << tr("ReplayGain") << tr("Analyzed"));
+            << tr("Key") << tr("Duration") << tr("ReplayGain") << tr("Analyzed")
+            << tr("Energy") << tr("Phrases"));
     m_pTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_pTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_pTable->verticalHeader()->setVisible(false);
@@ -211,6 +212,11 @@ void DlgMusicSync::populateTable(const QVector<TrackFeatures>& rows) {
         setCell(msToClock(f.durationMs));
         setCell(replayGainText(f.replaygainRatio));
         setCell(f.analyzed ? tr("Yes") : tr("No"));
+        setCell(f.energyCurve.isEmpty()
+                        ? QStringLiteral("—")
+                        : QString::number(f.overallEnergy, 'f', 2));
+        setCell(f.phrases.isEmpty() ? QStringLiteral("—")
+                                    : QString::number(f.phrases.size()));
     }
     m_pTable->resizeColumnsToContents();
     m_pSummaryLabel->setText(
