@@ -11,6 +11,7 @@ class CoreServices;
 }
 
 class QCheckBox;
+class QComboBox;
 class QLabel;
 class QPushButton;
 class QTableWidget;
@@ -36,6 +37,7 @@ class DlgMusicSync : public QDialog {
     void slotAnalyzeMissing();
     void slotAnalysisProgress(int currentTrackNumber, int totalTracks);
     void slotAnalysisFinished();
+    void slotGenerateSequence();
 
   private:
     void populateTable(const QVector<TrackFeatures>& rows);
@@ -47,6 +49,8 @@ class DlgMusicSync : public QDialog {
     QPushButton* m_pSnapshotButton;
     QPushButton* m_pReloadButton;
     QPushButton* m_pAnalyzeButton;
+    QComboBox* m_pEnergyPreset;
+    QPushButton* m_pGenerateButton;
     QTableWidget* m_pTable;
     QLabel* m_pSummaryLabel;
 };

@@ -3979,6 +3979,8 @@ if(MUSIC_SYNC_ENABLED)
     src/music_sync/planner/pair_scorer.cpp
     src/music_sync/planner/explanation_builder.h
     src/music_sync/planner/explanation_builder.cpp
+    src/music_sync/planner/sequence_optimizer.h
+    src/music_sync/planner/sequence_optimizer.cpp
     src/music_sync/music_sync_controller.h
     src/music_sync/music_sync_controller.cpp
     src/music_sync/dlg_music_sync.h

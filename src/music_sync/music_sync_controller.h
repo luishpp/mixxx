@@ -6,6 +6,8 @@
 #include <memory>
 
 #include "analyzer/trackanalysisscheduler.h"
+#include "music_sync/domain/arrangement.h"
+#include "music_sync/domain/mix_intent.h"
 #include "music_sync/domain/track_features.h"
 
 namespace mixxx {
@@ -53,6 +55,11 @@ class MusicSyncController : public QObject {
 
     /// Number of snapshots currently stored.
     int snapshotCount() const;
+
+    /// Generates ranked candidate sequences (>=3 when possible) from the
+    /// analyzed snapshots, using the given intent. Empty when fewer than two
+    /// analyzed tracks exist.
+    QVector<Arrangement> generateSequences(const MixIntent& intent);
 
     /// Triggers Mixxx's native analysis for tracks (scanning up to `limit`) that
     /// still need it (no beatgrid/bpm or no key). Returns the number scheduled.

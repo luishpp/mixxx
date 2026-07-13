@@ -1,11 +1,14 @@
 #include "music_sync/dlg_music_sync.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFont>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QHeaderView>
 #include <QLabel>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QStringList>
 #include <QTableWidget>
@@ -14,6 +17,8 @@
 #include <cmath>
 
 #include "coreservices.h"
+#include "music_sync/domain/arrangement.h"
+#include "music_sync/domain/mix_intent.h"
 #include "music_sync/music_sync_controller.h"
 #include "util/logger.h"
 
@@ -55,6 +60,8 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
           m_pSnapshotButton(nullptr),
           m_pReloadButton(nullptr),
           m_pAnalyzeButton(nullptr),
+          m_pEnergyPreset(nullptr),
+          m_pGenerateButton(nullptr),
           m_pTable(nullptr),
           m_pSummaryLabel(nullptr) {
     setWindowTitle(tr("Music Sync DJ"));
@@ -110,6 +117,21 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
     m_pAnalyzeButton->setEnabled(ready);
     connect(m_pAnalyzeButton, &QPushButton::clicked, this, &DlgMusicSync::slotAnalyzeMissing);
     pActions->addWidget(m_pAnalyzeButton);
+
+    m_pEnergyPreset = new QComboBox(this);
+    m_pEnergyPreset->addItem(tr("Ascending"), static_cast<int>(EnergyPreset::Ascending));
+    m_pEnergyPreset->addItem(tr("Center peak"), static_cast<int>(EnergyPreset::CenterPeak));
+    m_pEnergyPreset->addItem(tr("Late peak"), static_cast<int>(EnergyPreset::LatePeak));
+    m_pEnergyPreset->addItem(tr("Waves"), static_cast<int>(EnergyPreset::Waves));
+    m_pEnergyPreset->addItem(tr("Constant"), static_cast<int>(EnergyPreset::Constant));
+    m_pEnergyPreset->setCurrentIndex(2); // Late peak
+    m_pEnergyPreset->setEnabled(ready);
+    pActions->addWidget(m_pEnergyPreset);
+
+    m_pGenerateButton = new QPushButton(tr("Generate sequence"), this);
+    m_pGenerateButton->setEnabled(ready);
+    connect(m_pGenerateButton, &QPushButton::clicked, this, &DlgMusicSync::slotGenerateSequence);
+    pActions->addWidget(m_pGenerateButton);
 
     connect(m_pController,
             &MusicSyncController::analysisProgress,
@@ -186,10 +208,73 @@ void DlgMusicSync::slotAnalysisFinished() {
     populateTable(m_pController->loadSnapshots());
 }
 
+void DlgMusicSync::slotGenerateSequence() {
+    MixIntent intent;
+    intent.energyPreset = static_cast<EnergyPreset>(m_pEnergyPreset->currentData().toInt());
+    intent.maxTempoChangePercent = tempo_tolerance::kBalanced;
+
+    const QVector<Arrangement> arrangements = m_pController->generateSequences(intent);
+    if (arrangements.isEmpty()) {
+        m_pSummaryLabel->setText(
+                tr("Need at least 2 analyzed tracks to generate a sequence."));
+        return;
+    }
+
+    QHash<qint64, TrackFeatures> byId;
+    for (const TrackFeatures& features : m_pController->loadSnapshots()) {
+        byId.insert(features.mixxxTrackId, features);
+    }
+
+    const Arrangement& best = arrangements.first();
+    QString report =
+            tr("Best of %1 alternative(s) — average compatibility %2%, energy fit %3%\n\n")
+                    .arg(arrangements.size())
+                    .arg(qRound(best.totalScore * 100.0))
+                    .arg(qRound(best.energyFitScore * 100.0));
+    for (const ArrangementItem& item : best.items) {
+        const TrackFeatures features = byId.value(item.mixxxTrackId);
+        report += QStringLiteral("%1. %2 - %3  (%4 BPM, %5)%6\n")
+                          .arg(item.position + 1, 2)
+                          .arg(features.artist.isEmpty() ? QStringLiteral("?") : features.artist,
+                                  features.title.isEmpty() ? QStringLiteral("?") : features.title,
+                                  features.bpm > 0.0 ? QString::number(features.bpm, 'f', 1)
+                                                     : QStringLiteral("—"),
+                                  features.camelot.isEmpty() ? QStringLiteral("—")
+                                                             : features.camelot,
+                                  item.locked ? tr("  [locked]") : QString());
+        if (item.position > 0) {
+            report += QStringLiteral("      [%1%] %2\n")
+                              .arg(qRound(item.pairScoreFromPrevious * 100.0))
+                              .arg(item.explanationFromPrevious);
+        }
+    }
+    if (!best.warnings.isEmpty()) {
+        report += QStringLiteral("\n") + tr("Warnings: ") +
+                best.warnings.join(QStringLiteral("; "));
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Generated sequence"));
+    dialog.resize(760, 560);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* view = new QPlainTextEdit(&dialog);
+    view->setReadOnly(true);
+    view->setPlainText(report);
+    layout->addWidget(view);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::accept);
+    layout->addWidget(buttons);
+    dialog.exec();
+
+    m_pSummaryLabel->setText(
+            tr("Generated %1 sequence alternative(s).").arg(arrangements.size()));
+}
+
 void DlgMusicSync::setBusy(bool busy) {
     m_pSnapshotButton->setEnabled(!busy);
     m_pReloadButton->setEnabled(!busy);
     m_pAnalyzeButton->setEnabled(!busy);
+    m_pGenerateButton->setEnabled(!busy);
 }
 
 void DlgMusicSync::populateTable(const QVector<TrackFeatures>& rows) {

@@ -16,6 +16,7 @@
 #include "music_sync/analysis/advanced_analysis_adapter.h"
 #include "music_sync/analysis/analysis_repository.h"
 #include "music_sync/analysis/native_analysis_adapter.h"
+#include "music_sync/planner/sequence_optimizer.h"
 #include "music_sync/sidecar_database.h"
 #include "preferences/usersettings.h"
 #include "track/track.h"
@@ -155,6 +156,27 @@ int MusicSyncController::snapshotCount() const {
         return 0;
     }
     return AnalysisRepository(m_pDatabase->database()).count();
+}
+
+QVector<Arrangement> MusicSyncController::generateSequences(const MixIntent& intent) {
+    QVector<Arrangement> out;
+    if (!m_pDatabase) {
+        return out;
+    }
+    const AnalysisRepository repository(m_pDatabase->database());
+    QVector<TrackFeatures> analyzed;
+    for (const TrackFeatures& features : repository.loadAll()) {
+        if (features.analyzed) {
+            analyzed.append(features);
+        }
+    }
+    if (analyzed.size() < 2) {
+        return out;
+    }
+    SequenceOptimizer::Options options;
+    options.intent = intent;
+    options.numAlternatives = 3;
+    return SequenceOptimizer::arrange(analyzed, options);
 }
 
 int MusicSyncController::analyzeMissing(int limit) {

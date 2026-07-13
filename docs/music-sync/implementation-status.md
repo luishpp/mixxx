@@ -51,16 +51,18 @@ Nota de build: reconfigurar OFF→ON no mesmo diretório exige forçar o AUTOMOC
 - Correção manual dos campos avançados fica como refinamento futuro (não bloqueia o MVP).
 - [ ] (Interativo — usuário) Conferir na GUI ~5 faixas eletrônicas com janelas de transição plausíveis (critério de saída da Fase 3).
 
-## Fase 4 — Motor de sequência — parte 4a ✅ (2026-07-12)
+## Fase 4 — Motor de sequência ✅ (2026-07-12)
 - [x] **Compatibilidade harmônica (Camelot)** explícita e testada (`HarmonicCompatibility`): parse "8A"/"12B" + regras da roda (mesmo código 1.0; ±1 mesma letra 0.9; relativa A/B 0.75; distantes menor; incompatível nunca bloqueia).
 - [x] **Curva de energia** (`EnergyCurve`): presets ascendente/pico-central/pico-final/ondas/constante/custom + amostragem linear.
 - [x] **`PairScore` versionado** (`PairScorer`, pesos §18.2) com breakdown decomponível (harmônica/tempo/frase/energia/vocal/janela/estilo) + penalidades (tempo acima da tolerância; faixa não analisada). Componentes puros e testáveis.
 - [x] **Explicações** (`ExplanationBuilder`) derivadas do mesmo breakdown (RF-008).
 - [x] **Testes**: Camelot, tempo, pair score (forte > fraco), penalidade de não-analisada, presets, explicação. **ctest do módulo: 16/16**.
-- [ ] **Fase 4b** (pendente): otimizador (guloso + 2-opt/inserção/swap, **posições travadas** p/ curadoria híbrida, **≥3 alternativas**), persistência de projetos/arranjos e UI para gerar/ver sequências — fecha o critério de saída da Fase 4.
+- [x] **Fase 4b**: `SequenceOptimizer` (guloso com look-ahead + 2-opt, **posições travadas** p/ curadoria híbrida, **≥3 alternativas**, determinístico) com testes (cobertura de todas as faixas, locks respeitados, reprodutível). Painel: seletor de preset de energia + botão **"Generate sequence"** que roda o otimizador sobre os snapshots analisados e mostra a sequência com score e explicação por par. **ctest do módulo: 19/19**.
+- Persistência de projetos/arranjos (migration) e UI de *locking* ficam como refinamento — o engine já suporta posições travadas.
+- [ ] (Interativo — usuário) *Options → Music Sync* → "Read native analysis" → **Generate sequence**, conferir a ordem + explicações por par (respeitando a curva de energia escolhida).
 
 ## Próximas fases (roadmap)
-- **Fase 1, 2, 3, 4a** — ✅ concluídas (acima).
+- **Fase 1, 2, 3, 4** — ✅ concluídas (acima).
 - **Fase 4** — Motor de sequência (Camelot, pair score versionado, otimizador, ≥3 alternativas, explicações; curadoria **híbrida**: âncoras dos atos travadas + otimização do restante).
 - **Fase 5** — Planejador de transições (plano declarativo: crossfade, EQ Blend, Bass Swap, Cut em frase; fallback Auto DJ).
 - **Fase 6** — Prévia em dois decks (1º marco técnico: transição automática de 32 compassos entre 2 faixas).

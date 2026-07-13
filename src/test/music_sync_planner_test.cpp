@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <QSet>
 #include <QString>
 
 #include "music_sync/domain/mix_intent.h"
@@ -8,6 +9,7 @@
 #include "music_sync/planner/explanation_builder.h"
 #include "music_sync/planner/harmonic_compatibility.h"
 #include "music_sync/planner/pair_scorer.h"
+#include "music_sync/planner/sequence_optimizer.h"
 
 namespace {
 
@@ -99,6 +101,74 @@ TEST(MusicSyncExplanationTest, MentionsKeyFacts) {
     EXPECT_TRUE(text.contains(QStringLiteral("8A -> 9A")));
     EXPECT_TRUE(text.contains(QStringLiteral("BPM")));
     EXPECT_TRUE(text.contains(QStringLiteral("energy")));
+}
+
+TEST(MusicSyncOptimizerTest, ProducesAlternativesCoveringAllTracks) {
+    QVector<TrackFeatures> tracks;
+    tracks.append(makeTrack(1, 122.0, QStringLiteral("8A"), 0.30));
+    tracks.append(makeTrack(2, 123.0, QStringLiteral("9A"), 0.40));
+    tracks.append(makeTrack(3, 124.0, QStringLiteral("10A"), 0.55));
+    tracks.append(makeTrack(4, 125.0, QStringLiteral("11A"), 0.70));
+    tracks.append(makeTrack(5, 126.0, QStringLiteral("12A"), 0.85));
+    tracks.append(makeTrack(6, 127.0, QStringLiteral("1A"), 1.00));
+
+    SequenceOptimizer::Options options;
+    options.intent.energyPreset = EnergyPreset::Ascending;
+    options.numAlternatives = 3;
+
+    const QVector<Arrangement> arrangements = SequenceOptimizer::arrange(tracks, options);
+    ASSERT_GE(arrangements.size(), 1);
+    EXPECT_LE(arrangements.size(), 3);
+    for (const Arrangement& arr : arrangements) {
+        ASSERT_EQ(arr.items.size(), tracks.size());
+        QSet<std::int64_t> ids;
+        for (const ArrangementItem& item : arr.items) {
+            ids.insert(item.mixxxTrackId);
+        }
+        EXPECT_EQ(ids.size(), tracks.size()); // each track exactly once
+    }
+    for (int i = 1; i < arrangements.size(); ++i) {
+        EXPECT_LE(arrangements[i].totalScore, arrangements[0].totalScore + 1e-9); // best first
+    }
+}
+
+TEST(MusicSyncOptimizerTest, RespectsLockedPositions) {
+    QVector<TrackFeatures> tracks;
+    for (int i = 0; i < 6; ++i) {
+        tracks.append(makeTrack(i + 1, 124.0 + i, QStringLiteral("8A"), 0.4 + 0.1 * i));
+    }
+    SequenceOptimizer::Options options;
+    options.locks.append({0, 3}); // track id 3 pinned to position 0
+    options.locks.append({5, 6}); // track id 6 pinned to position 5
+
+    const QVector<Arrangement> arrangements = SequenceOptimizer::arrange(tracks, options);
+    ASSERT_GE(arrangements.size(), 1);
+    for (const Arrangement& arr : arrangements) {
+        ASSERT_EQ(arr.items.size(), 6);
+        EXPECT_EQ(arr.items.first().mixxxTrackId, 3);
+        EXPECT_TRUE(arr.items.first().locked);
+        EXPECT_EQ(arr.items.last().mixxxTrackId, 6);
+        EXPECT_TRUE(arr.items.last().locked);
+    }
+}
+
+TEST(MusicSyncOptimizerTest, Deterministic) {
+    QVector<TrackFeatures> tracks;
+    tracks.append(makeTrack(1, 122.0, QStringLiteral("8A"), 0.30));
+    tracks.append(makeTrack(2, 128.0, QStringLiteral("3B"), 0.90));
+    tracks.append(makeTrack(3, 124.0, QStringLiteral("9A"), 0.55));
+    tracks.append(makeTrack(4, 125.0, QStringLiteral("10A"), 0.70));
+
+    SequenceOptimizer::Options options;
+    const QVector<Arrangement> a = SequenceOptimizer::arrange(tracks, options);
+    const QVector<Arrangement> b = SequenceOptimizer::arrange(tracks, options);
+    ASSERT_FALSE(a.isEmpty());
+    ASSERT_EQ(a.size(), b.size());
+    ASSERT_EQ(a.first().items.size(), b.first().items.size());
+    for (int i = 0; i < a.first().items.size(); ++i) {
+        EXPECT_EQ(a.first().items[i].mixxxTrackId, b.first().items[i].mixxxTrackId);
+    }
+    EXPECT_DOUBLE_EQ(a.first().totalScore, b.first().totalScore);
 }
 
 } // namespace
