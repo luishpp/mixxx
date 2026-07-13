@@ -61,11 +61,17 @@ Nota de build: reconfigurar OFF→ON no mesmo diretório exige forçar o AUTOMOC
 - Persistência de projetos/arranjos (migration) e UI de *locking* ficam como refinamento — o engine já suporta posições travadas.
 - [ ] (Interativo — usuário) *Options → Music Sync* → "Read native analysis" → **Generate sequence**, conferir a ordem + explicações por par (respeitando a curva de energia escolhida).
 
+## Fase 5 — Planejador de transições ✅ (2026-07-12)
+- [x] **Domínio** `domain/transition_plan.h`: `TransitionType` (Crossfade, EqBlend, BassSwap, FilterTransition, CutOnPhrase, AutoDjFallback), `ControlAction` (controle @ beat, valor instantâneo) e `AutomationRamp` (rampa linear em [fromBeat,toBeat]); `TransitionPlan` = plano declarativo/serializável (tipo, posições source/target em ms, duração em compassos/beats/ms, `targetBpm` + `sourceRateRatio`/`targetRateRatio` para beatsync, automações, score, confiança, explicação, warnings). **Sem tocar no motor de áudio** — o executor (fase posterior) consome o plano.
+- [x] **`TransitionPlanner`** (`planner/`): `chooseType()` escolhe a estratégia a partir das features (sem janelas ou não analisado → **AutoDjFallback**; tempo muito acima da tolerância *ou* key incompatível → **CutOnPhrase**; dançante + harmônico + janelas confiáveis → **BassSwap**; janelas confiáveis → **EqBlend**; senão **Crossfade**). `plan()` computa posições (da 1ª janela de saída/entrada), duração (preferida, limitada pelos compassos da janela; curta para cut/fallback), rates de beatsync p/ o `targetBpm`, automações por tipo (bass swap/EQ blend com kill+troca de graves; filtro; cut na frase; crossfade linear), score/confiança (do `PairScorer` + confiança das janelas) e explicação/warnings.
+- [x] **Testes** (`music_sync_planner_test.cpp`): plano válido p/ par bom (posições/rates/duração/automações/tipo), fallback sem janelas, cut quando incompatível. **ctest do módulo: 22/22 verdes.**
+- [x] Painel "Generate sequence" agora anexa, por par consecutivo, a **transição escolhida** (tipo, compassos, confiança).
+- Persistência do plano de transição e edição manual ficam como refinamento; o executor real chega na Fase 6.
+- [ ] (Interativo — usuário) *Generate sequence* e conferir os tipos de transição sugeridos entre faixas (EQ/Bass Swap para pares harmônicos, Cut para saltos de tempo/tom).
+
 ## Próximas fases (roadmap)
-- **Fase 1, 2, 3, 4** — ✅ concluídas (acima).
-- **Fase 4** — Motor de sequência (Camelot, pair score versionado, otimizador, ≥3 alternativas, explicações; curadoria **híbrida**: âncoras dos atos travadas + otimização do restante).
-- **Fase 5** — Planejador de transições (plano declarativo: crossfade, EQ Blend, Bass Swap, Cut em frase; fallback Auto DJ).
-- **Fase 6** — Prévia em dois decks (1º marco técnico: transição automática de 32 compassos entre 2 faixas).
+- **Fase 1, 2, 3, 4, 5** — ✅ concluídas (acima).
+- **Fase 6** — Prévia em dois decks (1º marco técnico: transição automática de 32 compassos entre 2 faixas), consumindo o `TransitionPlan`.
 - **Fase 7** — Executor de mini-set (máquina de estados, fila, automações, ManualOverride).
 - **Fase 8** — Gravação e relatórios (WAV master via Mixxx, tracklist, session-report). **→ set de 35 faixas executável e gravável.**
 - **Fase 9–10** — Worker Python opcional; Echo Out/loop-out; stems; LLM de intenção; render offline.

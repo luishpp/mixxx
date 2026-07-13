@@ -10,6 +10,7 @@
 #include "music_sync/planner/harmonic_compatibility.h"
 #include "music_sync/planner/pair_scorer.h"
 #include "music_sync/planner/sequence_optimizer.h"
+#include "music_sync/planner/transition_planner.h"
 
 namespace {
 
@@ -169,6 +170,68 @@ TEST(MusicSyncOptimizerTest, Deterministic) {
         EXPECT_EQ(a.first().items[i].mixxxTrackId, b.first().items[i].mixxxTrackId);
     }
     EXPECT_DOUBLE_EQ(a.first().totalScore, b.first().totalScore);
+}
+
+TrackFeatures makeTrackWithWindows(
+        std::int64_t id, double bpm, const QString& camelot, double energy) {
+    TrackFeatures f = makeTrack(id, bpm, camelot, energy);
+    f.durationMs = 300000;
+    TransitionWindow exit;
+    exit.kind = QStringLiteral("exit");
+    exit.startMs = 200000;
+    exit.endMs = 232000;
+    exit.bars = 16;
+    exit.confidence = 0.9f;
+    exit.energyStability = 0.9f;
+    f.exitWindows.append(exit);
+    TransitionWindow entry;
+    entry.kind = QStringLiteral("entry");
+    entry.startMs = 0;
+    entry.endMs = 32000;
+    entry.bars = 16;
+    entry.confidence = 0.9f;
+    entry.energyStability = 0.9f;
+    f.entryWindows.append(entry);
+    return f;
+}
+
+TEST(MusicSyncTransitionTest, PlanValidForGoodPair) {
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 124.5, QStringLiteral("9A"), 0.62);
+    const TransitionPlan p = TransitionPlanner::plan(a, b, intent);
+    EXPECT_EQ(p.sourceTrackId, 1);
+    EXPECT_EQ(p.targetTrackId, 2);
+    EXPECT_GT(p.durationBars, 0);
+    EXPECT_LE(p.durationBars, 16); // capped by the exit window bars
+    EXPECT_DOUBLE_EQ(p.targetBpm, 124.5);
+    EXPECT_NEAR(p.sourceRateRatio, 124.5 / 124.0, 1e-9);
+    EXPECT_DOUBLE_EQ(p.targetRateRatio, 1.0);
+    EXPECT_FALSE(p.ramps.isEmpty());
+    EXPECT_FALSE(p.actions.isEmpty());
+    EXPECT_TRUE(p.type == TransitionType::EqBlend || p.type == TransitionType::BassSwap);
+    EXPECT_GT(p.confidence, 0.5);
+    EXPECT_EQ(p.sourceExitMs, 200000);
+    EXPECT_EQ(p.targetEntryMs, 0);
+}
+
+TEST(MusicSyncTransitionTest, FallbackWhenNoWindows) {
+    const MixIntent intent;
+    const TrackFeatures a = makeTrack(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrack(2, 124.5, QStringLiteral("9A"), 0.60);
+    const TransitionPlan p = TransitionPlanner::plan(a, b, intent);
+    EXPECT_EQ(p.type, TransitionType::AutoDjFallback);
+    EXPECT_FALSE(p.warnings.isEmpty());
+    EXPECT_LE(p.durationBars, 16);
+}
+
+TEST(MusicSyncTransitionTest, CutWhenIncompatible) {
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 145.0, QStringLiteral("3B"), 0.60);
+    const TransitionPlan p = TransitionPlanner::plan(a, b, intent);
+    EXPECT_EQ(p.type, TransitionType::CutOnPhrase);
+    EXPECT_LE(p.durationBars, 8); // a cut is short
 }
 
 } // namespace

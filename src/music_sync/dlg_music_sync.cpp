@@ -19,7 +19,9 @@
 #include "coreservices.h"
 #include "music_sync/domain/arrangement.h"
 #include "music_sync/domain/mix_intent.h"
+#include "music_sync/domain/transition_plan.h"
 #include "music_sync/music_sync_controller.h"
+#include "music_sync/planner/transition_planner.h"
 #include "util/logger.h"
 
 namespace {
@@ -231,6 +233,8 @@ void DlgMusicSync::slotGenerateSequence() {
                     .arg(arrangements.size())
                     .arg(qRound(best.totalScore * 100.0))
                     .arg(qRound(best.energyFitScore * 100.0));
+    TrackFeatures prevFeatures;
+    bool havePrev = false;
     for (const ArrangementItem& item : best.items) {
         const TrackFeatures features = byId.value(item.mixxxTrackId);
         report += QStringLiteral("%1. %2 - %3  (%4 BPM, %5)%6\n")
@@ -246,7 +250,17 @@ void DlgMusicSync::slotGenerateSequence() {
             report += QStringLiteral("      [%1%] %2\n")
                               .arg(qRound(item.pairScoreFromPrevious * 100.0))
                               .arg(item.explanationFromPrevious);
+            if (havePrev) {
+                const TransitionPlan plan =
+                        TransitionPlanner::plan(prevFeatures, features, intent);
+                report += QStringLiteral("      ↳ %1 — %2 bars, %3% conf\n")
+                                  .arg(transitionTypeName(plan.type))
+                                  .arg(plan.durationBars)
+                                  .arg(qRound(plan.confidence * 100.0));
+            }
         }
+        prevFeatures = features;
+        havePrev = true;
     }
     if (!best.warnings.isEmpty()) {
         report += QStringLiteral("\n") + tr("Warnings: ") +
