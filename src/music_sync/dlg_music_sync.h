@@ -33,15 +33,20 @@ class DlgMusicSync : public QDialog {
     void slotModuleEnabledToggled(bool checked);
     void slotSnapshotLibrary();
     void slotReloadSnapshots();
+    void slotAnalyzeMissing();
+    void slotAnalysisProgress(int currentTrackNumber, int totalTracks);
+    void slotAnalysisFinished();
 
   private:
     void populateTable(const QVector<TrackFeatures>& rows);
+    void setBusy(bool busy);
 
     MusicSyncController* m_pController;
     QLabel* m_pStatusLabel;
     QCheckBox* m_pEnabledCheckBox;
     QPushButton* m_pSnapshotButton;
     QPushButton* m_pReloadButton;
+    QPushButton* m_pAnalyzeButton;
     QTableWidget* m_pTable;
     QLabel* m_pSummaryLabel;
 };

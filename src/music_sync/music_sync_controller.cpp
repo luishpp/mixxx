@@ -3,8 +3,14 @@
 #include <QDir>
 #include <QSqlQuery>
 #include <QSqlRecord>
+#include <QThread>
+#include <algorithm>
 
+#include "analyzer/analyzerprogress.h"
+#include "analyzer/analyzerscheduledtrack.h"
+#include "analyzer/analyzerthread.h"
 #include "coreservices.h"
+#include "library/library.h"
 #include "library/trackcollection.h"
 #include "library/trackcollectionmanager.h"
 #include "music_sync/analysis/analysis_repository.h"
@@ -28,7 +34,8 @@ MusicSyncController::MusicSyncController(
         std::shared_ptr<mixxx::CoreServices> pCoreServices, QObject* parent)
         : QObject(parent),
           m_pCoreServices(std::move(pCoreServices)),
-          m_ready(false) {
+          m_ready(false),
+          m_pScheduler(TrackAnalysisScheduler::NullPointer()) {
 }
 
 MusicSyncController::~MusicSyncController() = default;
@@ -146,6 +153,76 @@ int MusicSyncController::snapshotCount() const {
         return 0;
     }
     return AnalysisRepository(m_pDatabase->database()).count();
+}
+
+int MusicSyncController::analyzeMissing(int limit) {
+    if (!m_ready || !m_pCoreServices || m_pScheduler) {
+        return 0; // not ready, or a run is already in progress
+    }
+    const std::shared_ptr<Library> pLibrary = m_pCoreServices->getLibrary();
+    const std::shared_ptr<TrackCollectionManager> pTrackCollectionManager =
+            m_pCoreServices->getTrackCollectionManager();
+    if (!pLibrary || !pTrackCollectionManager) {
+        return 0;
+    }
+    TrackCollection* pCollection = pTrackCollectionManager->internalCollection();
+    if (!pCollection) {
+        return 0;
+    }
+
+    QSqlQuery idQuery(pCollection->database());
+    idQuery.prepare(QStringLiteral(
+            "SELECT id FROM library WHERE mixxx_deleted=0 ORDER BY id LIMIT :limit"));
+    idQuery.bindValue(QStringLiteral(":limit"), limit);
+    if (!idQuery.exec()) {
+        kLogger.warning() << "Could not query library track ids:" << idQuery.lastError();
+        return 0;
+    }
+
+    QList<AnalyzerScheduledTrack> tracksToAnalyze;
+    const int idColumn = idQuery.record().indexOf(QStringLiteral("id"));
+    while (idQuery.next()) {
+        const TrackId trackId(idQuery.value(idColumn));
+        const TrackPointer pTrack = pTrackCollectionManager->getTrackById(trackId);
+        if (pTrack && NativeAnalysisAdapter::needsAnalysis(pTrack)) {
+            tracksToAnalyze.append(AnalyzerScheduledTrack(trackId));
+        }
+    }
+    if (tracksToAnalyze.isEmpty()) {
+        return 0;
+    }
+
+    const int numThreads = std::max(1, QThread::idealThreadCount());
+    m_pScheduler = pLibrary->createTrackAnalysisScheduler(
+            numThreads,
+            static_cast<AnalyzerModeFlags>(
+                    AnalyzerModeFlags::WithBeats | AnalyzerModeFlags::LowPriority));
+
+    connect(m_pScheduler.get(),
+            &TrackAnalysisScheduler::progress,
+            this,
+            [this](AnalyzerProgress, int currentTrackNumber, int totalTracks) {
+                emit analysisProgress(currentTrackNumber, totalTracks);
+            });
+    connect(m_pScheduler.get(),
+            &TrackAnalysisScheduler::finished,
+            this,
+            [this, limit]() {
+                // Tracks now have BPM/key; refresh the snapshots, then tear the
+                // scheduler down (same pattern as Mixxx's AnalysisFeature).
+                snapshotLibrary(limit);
+                m_pScheduler.reset();
+                emit analysisFinished();
+            });
+
+    const int scheduled = m_pScheduler->scheduleTracks(tracksToAnalyze);
+    if (scheduled > 0) {
+        m_pScheduler->resume();
+    } else {
+        m_pScheduler.reset();
+    }
+    kLogger.info() << "Scheduled" << scheduled << "tracks for native analysis";
+    return scheduled;
 }
 
 } // namespace mixxx::music_sync

@@ -38,8 +38,8 @@ Nota de build: reconfigurar OFF→ON no mesmo diretório exige forçar o AUTOMOC
 - [x] Painel: tabela (Artista, Título, BPM, Camelot, Key, Duração, ReplayGain, Analisado) + botões "ler análise nativa" e "recarregar".
 - [x] **Build ON** OK; **testes** `MusicSyncSidecarDatabaseTest` (agora valida migração v2) e `MusicSyncAnalysisRepositoryTest` passam (2/2).
 - [x] OFF intacto por construção: única mudança upstream é uma linha dentro do `#ifdef` de `slotMusicSync` (passa `CoreServices` em vez de `getSettings()`).
-- [ ] (Interativo — usuário) Abrir *Options → Music Sync*, clicar "ler análise nativa da biblioteca" e conferir ~20 faixas com BPM/Camelot/duração/status consistentes.
-- Pendente (Fase 2b): comando "analisar faltantes" via `Library::createTrackAnalysisScheduler` (detecção de faltantes já implementada em `NativeAnalysisAdapter::needsAnalysis`).
+- [x] **Fase 2b**: botão "Analyze missing (Mixxx)" — `MusicSyncController::analyzeMissing()` dispara a análise nativa do Mixxx via `Library::createTrackAnalysisScheduler` para faixas sem beatgrid/bpm ou sem key; progresso e conclusão refletidos no painel, com re-snapshot ao terminar.
+- [ ] (Interativo — usuário) Abrir *Options → Music Sync*, "ler análise nativa" (conferir ~20 faixas) e "Analyze missing" (rodar a análise do Mixxx para faixas faltantes).
 
 ## Próximas fases (roadmap)
 - **Fase 1 e 2** — ✅ concluídas (acima).

@@ -5,6 +5,7 @@
 #include <QVector>
 #include <memory>
 
+#include "analyzer/trackanalysisscheduler.h"
 #include "music_sync/domain/track_features.h"
 
 namespace mixxx {
@@ -53,10 +54,25 @@ class MusicSyncController : public QObject {
     /// Number of snapshots currently stored.
     int snapshotCount() const;
 
+    /// Triggers Mixxx's native analysis for tracks (scanning up to `limit`) that
+    /// still need it (no beatgrid/bpm or no key). Returns the number scheduled.
+    /// Emits analysisProgress()/analysisFinished() and re-snapshots on finish.
+    int analyzeMissing(int limit);
+
+    /// Whether a native analysis run is currently in progress.
+    bool isAnalyzing() const {
+        return static_cast<bool>(m_pScheduler);
+    }
+
+  signals:
+    void analysisProgress(int currentTrackNumber, int totalTracks);
+    void analysisFinished();
+
   private:
     std::shared_ptr<mixxx::CoreServices> m_pCoreServices;
     std::unique_ptr<SidecarDatabase> m_pDatabase;
     bool m_ready;
+    TrackAnalysisScheduler::Pointer m_pScheduler;
 };
 
 } // namespace mixxx::music_sync

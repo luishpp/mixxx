@@ -54,6 +54,7 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
           m_pEnabledCheckBox(nullptr),
           m_pSnapshotButton(nullptr),
           m_pReloadButton(nullptr),
+          m_pAnalyzeButton(nullptr),
           m_pTable(nullptr),
           m_pSummaryLabel(nullptr) {
     setWindowTitle(tr("Music Sync DJ"));
@@ -105,6 +106,20 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
     connect(m_pReloadButton, &QPushButton::clicked, this, &DlgMusicSync::slotReloadSnapshots);
     pActions->addWidget(m_pReloadButton);
 
+    m_pAnalyzeButton = new QPushButton(tr("Analyze missing (Mixxx)"), this);
+    m_pAnalyzeButton->setEnabled(ready);
+    connect(m_pAnalyzeButton, &QPushButton::clicked, this, &DlgMusicSync::slotAnalyzeMissing);
+    pActions->addWidget(m_pAnalyzeButton);
+
+    connect(m_pController,
+            &MusicSyncController::analysisProgress,
+            this,
+            &DlgMusicSync::slotAnalysisProgress);
+    connect(m_pController,
+            &MusicSyncController::analysisFinished,
+            this,
+            &DlgMusicSync::slotAnalysisFinished);
+
     m_pSummaryLabel = new QLabel(this);
     pActions->addWidget(m_pSummaryLabel);
     pActions->addStretch(1);
@@ -147,6 +162,33 @@ void DlgMusicSync::slotSnapshotLibrary() {
 
 void DlgMusicSync::slotReloadSnapshots() {
     populateTable(m_pController->loadSnapshots());
+}
+
+void DlgMusicSync::slotAnalyzeMissing() {
+    setBusy(true);
+    const int scheduled = m_pController->analyzeMissing(kSnapshotLimit);
+    if (scheduled <= 0) {
+        setBusy(false);
+        m_pSummaryLabel->setText(tr("Nothing to analyze — all scanned tracks are analyzed."));
+    } else {
+        m_pSummaryLabel->setText(tr("Analyzing %1 track(s)…").arg(scheduled));
+    }
+}
+
+void DlgMusicSync::slotAnalysisProgress(int currentTrackNumber, int totalTracks) {
+    m_pSummaryLabel->setText(
+            tr("Analyzing %1/%2…").arg(currentTrackNumber).arg(totalTracks));
+}
+
+void DlgMusicSync::slotAnalysisFinished() {
+    setBusy(false);
+    populateTable(m_pController->loadSnapshots());
+}
+
+void DlgMusicSync::setBusy(bool busy) {
+    m_pSnapshotButton->setEnabled(!busy);
+    m_pReloadButton->setEnabled(!busy);
+    m_pAnalyzeButton->setEnabled(!busy);
 }
 
 void DlgMusicSync::populateTable(const QVector<TrackFeatures>& rows) {
