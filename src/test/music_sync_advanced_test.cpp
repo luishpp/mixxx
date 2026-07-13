@@ -74,4 +74,69 @@ TEST(MusicSyncAdvancedTest, ComputePhrasesGuards) {
     EXPECT_TRUE(AdvancedAnalysisAdapter::computePhrases(0.0, 120.0, 100000, 0, 16).isEmpty());
 }
 
+TEST(MusicSyncAdvancedTest, ComputeSectionsLabelsEnds) {
+    // low(intro) -> high(drop) -> low(breakdown) -> high(drop) -> low(outro)
+    QVector<float> energy;
+    const auto fill = [&](int count, float v) {
+        for (int i = 0; i < count; ++i) {
+            energy.append(v);
+        }
+    };
+    fill(8, 0.1f);
+    fill(8, 0.9f);
+    fill(8, 0.1f);
+    fill(8, 0.9f);
+    fill(8, 0.1f);
+
+    const QVector<mixxx::music_sync::Section> sections =
+            AdvancedAnalysisAdapter::computeSections(energy, 100000);
+    ASSERT_EQ(sections.size(), 5);
+    EXPECT_EQ(sections.first().type, QStringLiteral("Intro"));
+    EXPECT_EQ(sections[1].type, QStringLiteral("Drop"));
+    EXPECT_EQ(sections[2].type, QStringLiteral("Breakdown"));
+    EXPECT_EQ(sections.last().type, QStringLiteral("Outro"));
+    EXPECT_EQ(sections.first().startMs, 0);
+    EXPECT_GT(sections.last().endMs, sections.first().startMs);
+}
+
+TEST(MusicSyncAdvancedTest, ComputeSectionsBuildBeforeDrop) {
+    QVector<float> energy;
+    for (int i = 0; i < 8; ++i) {
+        energy.append(0.5f); // groove (mid)
+    }
+    for (int i = 0; i < 8; ++i) {
+        energy.append(0.9f); // drop (high)
+    }
+    const QVector<mixxx::music_sync::Section> sections =
+            AdvancedAnalysisAdapter::computeSections(energy, 50000);
+    ASSERT_EQ(sections.size(), 2);
+    EXPECT_EQ(sections[0].type, QStringLiteral("Build")); // groove before a Drop
+    EXPECT_EQ(sections[1].type, QStringLiteral("Drop"));
+}
+
+TEST(MusicSyncAdvancedTest, ComputeTransitionWindowsEntryExit) {
+    const QVector<float> energy(64, 0.5f); // flat -> very stable
+    QVector<mixxx::music_sync::PhraseMarker> phrases;
+    phrases.append({0, 16});
+    phrases.append({32000, 16});
+    phrases.append({64000, 16});
+    phrases.append({96000, 2});
+
+    const auto entry =
+            AdvancedAnalysisAdapter::computeTransitionWindows(energy, phrases, 100000, true);
+    const auto exit =
+            AdvancedAnalysisAdapter::computeTransitionWindows(energy, phrases, 100000, false);
+    ASSERT_FALSE(entry.isEmpty());
+    ASSERT_FALSE(exit.isEmpty());
+    for (const auto& w : entry) {
+        EXPECT_LE(w.startMs, 30000); // first 30%
+        EXPECT_EQ(w.kind, QStringLiteral("entry"));
+    }
+    for (const auto& w : exit) {
+        EXPECT_GE(w.startMs, 60000); // last 40%
+        EXPECT_EQ(w.kind, QStringLiteral("exit"));
+    }
+    EXPECT_GT(exit.first().energyStability, 0.9f); // flat energy is stable
+}
+
 } // namespace

@@ -67,6 +67,78 @@ QVector<mixxx::music_sync::PhraseMarker> phrasesFromJson(const QString& json) {
     return out;
 }
 
+QString sectionsToJson(const QVector<mixxx::music_sync::Section>& sections) {
+    QJsonArray array;
+    for (const mixxx::music_sync::Section& s : sections) {
+        QJsonObject obj;
+        obj.insert(QStringLiteral("type"), s.type);
+        obj.insert(QStringLiteral("startMs"), static_cast<double>(s.startMs));
+        obj.insert(QStringLiteral("endMs"), static_cast<double>(s.endMs));
+        obj.insert(QStringLiteral("energy"), s.energy);
+        obj.insert(QStringLiteral("confidence"), s.confidence);
+        array.append(obj);
+    }
+    return QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact));
+}
+
+QVector<mixxx::music_sync::Section> sectionsFromJson(const QString& json) {
+    QVector<mixxx::music_sync::Section> out;
+    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+    if (doc.isArray()) {
+        for (const QJsonValue& value : doc.array()) {
+            const QJsonObject obj = value.toObject();
+            mixxx::music_sync::Section s;
+            s.type = obj.value(QStringLiteral("type")).toString();
+            s.startMs = static_cast<std::int64_t>(obj.value(QStringLiteral("startMs")).toDouble());
+            s.endMs = static_cast<std::int64_t>(obj.value(QStringLiteral("endMs")).toDouble());
+            s.energy = static_cast<float>(obj.value(QStringLiteral("energy")).toDouble());
+            s.confidence = static_cast<float>(obj.value(QStringLiteral("confidence")).toDouble());
+            out.append(s);
+        }
+    }
+    return out;
+}
+
+QString windowsToJson(const QVector<mixxx::music_sync::TransitionWindow>& windows) {
+    QJsonArray array;
+    for (const mixxx::music_sync::TransitionWindow& w : windows) {
+        QJsonObject obj;
+        obj.insert(QStringLiteral("kind"), w.kind);
+        obj.insert(QStringLiteral("startMs"), static_cast<double>(w.startMs));
+        obj.insert(QStringLiteral("endMs"), static_cast<double>(w.endMs));
+        obj.insert(QStringLiteral("bars"), w.bars);
+        obj.insert(QStringLiteral("energy"), w.energy);
+        obj.insert(QStringLiteral("energyStability"), w.energyStability);
+        obj.insert(QStringLiteral("instrumentalScore"), w.instrumentalScore);
+        obj.insert(QStringLiteral("confidence"), w.confidence);
+        array.append(obj);
+    }
+    return QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact));
+}
+
+QVector<mixxx::music_sync::TransitionWindow> windowsFromJson(const QString& json) {
+    QVector<mixxx::music_sync::TransitionWindow> out;
+    const QJsonDocument doc = QJsonDocument::fromJson(json.toUtf8());
+    if (doc.isArray()) {
+        for (const QJsonValue& value : doc.array()) {
+            const QJsonObject obj = value.toObject();
+            mixxx::music_sync::TransitionWindow w;
+            w.kind = obj.value(QStringLiteral("kind")).toString();
+            w.startMs = static_cast<std::int64_t>(obj.value(QStringLiteral("startMs")).toDouble());
+            w.endMs = static_cast<std::int64_t>(obj.value(QStringLiteral("endMs")).toDouble());
+            w.bars = obj.value(QStringLiteral("bars")).toInt();
+            w.energy = static_cast<float>(obj.value(QStringLiteral("energy")).toDouble());
+            w.energyStability =
+                    static_cast<float>(obj.value(QStringLiteral("energyStability")).toDouble());
+            w.instrumentalScore =
+                    static_cast<float>(obj.value(QStringLiteral("instrumentalScore")).toDouble());
+            w.confidence = static_cast<float>(obj.value(QStringLiteral("confidence")).toDouble());
+            out.append(w);
+        }
+    }
+    return out;
+}
+
 std::optional<std::int64_t> readOptionalMs(const QSqlQuery& query, int index) {
     if (index < 0) {
         return std::nullopt;
@@ -113,6 +185,9 @@ mixxx::music_sync::TrackFeatures readRow(const QSqlQuery& query) {
     f.bassCurve = curveFromJson(query.value(idx("bass_curve")).toString());
     f.phrases = phrasesFromJson(query.value(idx("phrase_markers")).toString());
     f.advancedAnalyzerVersion = query.value(idx("advanced_analyzer_version")).toString();
+    f.sections = sectionsFromJson(query.value(idx("sections")).toString());
+    f.entryWindows = windowsFromJson(query.value(idx("entry_windows")).toString());
+    f.exitWindows = windowsFromJson(query.value(idx("exit_windows")).toString());
     f.snapshotAt = query.value(idx("snapshot_at")).toString();
     return f;
 }
@@ -123,7 +198,8 @@ const QString kSelectColumns = QStringLiteral(
         "key_text, camelot, replaygain_ratio, has_beatgrid, intro_start_ms, "
         "intro_end_ms, outro_start_ms, outro_end_ms, analyzed, analyzer_version, "
         "overall_energy, energy_curve, bass_curve, phrase_markers, "
-        "advanced_analyzer_version, snapshot_at");
+        "advanced_analyzer_version, sections, entry_windows, exit_windows, "
+        "snapshot_at");
 } // anonymous namespace
 
 namespace mixxx::music_sync {
@@ -141,14 +217,16 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
             "  key_text, camelot, replaygain_ratio, has_beatgrid, intro_start_ms,"
             "  intro_end_ms, outro_start_ms, outro_end_ms, analyzed, analyzer_version,"
             "  overall_energy, energy_curve, bass_curve, phrase_markers,"
-            "  advanced_analyzer_version, snapshot_at) "
+            "  advanced_analyzer_version, sections, entry_windows, exit_windows,"
+            "  snapshot_at) "
             "VALUES ("
             "  :id, :location, :file_size, :title, :artist, :album, :genre,"
             "  :duration_ms, :sample_rate, :channels, :bitrate_kbps, :bpm, :key_chromatic,"
             "  :key_text, :camelot, :replaygain_ratio, :has_beatgrid, :intro_start_ms,"
             "  :intro_end_ms, :outro_start_ms, :outro_end_ms, :analyzed, :analyzer_version,"
             "  :overall_energy, :energy_curve, :bass_curve, :phrase_markers,"
-            "  :advanced_analyzer_version, datetime('now')) "
+            "  :advanced_analyzer_version, :sections, :entry_windows, :exit_windows,"
+            "  datetime('now')) "
             "ON CONFLICT(mixxx_track_id) DO UPDATE SET "
             "  location=excluded.location, file_size=excluded.file_size, title=excluded.title,"
             "  artist=excluded.artist, album=excluded.album, genre=excluded.genre,"
@@ -163,6 +241,8 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
             "  overall_energy=excluded.overall_energy, energy_curve=excluded.energy_curve,"
             "  bass_curve=excluded.bass_curve, phrase_markers=excluded.phrase_markers,"
             "  advanced_analyzer_version=excluded.advanced_analyzer_version,"
+            "  sections=excluded.sections, entry_windows=excluded.entry_windows,"
+            "  exit_windows=excluded.exit_windows,"
             "  snapshot_at=excluded.snapshot_at"));
 
     query.bindValue(QStringLiteral(":id"), static_cast<qlonglong>(f.mixxxTrackId));
@@ -193,6 +273,9 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
     query.bindValue(QStringLiteral(":bass_curve"), curveToJson(f.bassCurve));
     query.bindValue(QStringLiteral(":phrase_markers"), phrasesToJson(f.phrases));
     query.bindValue(QStringLiteral(":advanced_analyzer_version"), f.advancedAnalyzerVersion);
+    query.bindValue(QStringLiteral(":sections"), sectionsToJson(f.sections));
+    query.bindValue(QStringLiteral(":entry_windows"), windowsToJson(f.entryWindows));
+    query.bindValue(QStringLiteral(":exit_windows"), windowsToJson(f.exitWindows));
 
     if (!query.exec()) {
         kLogger.warning() << "Could not upsert track features for id" << f.mixxxTrackId

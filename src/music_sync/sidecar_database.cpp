@@ -116,6 +116,9 @@ bool SidecarDatabase::applyMigrations() {
         case 3:
             ok = migrateToV3();
             break;
+        case 4:
+            ok = migrateToV4();
+            break;
         default:
             kLogger.warning() << "No migration defined for version" << version;
             ok = false;
@@ -208,6 +211,23 @@ bool SidecarDatabase::migrateToV3() {
                                 "ADD COLUMN phrase_markers TEXT"),
                  QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
                                 "ADD COLUMN advanced_analyzer_version TEXT"),
+         }) {
+        if (!execStatement(m_database, statement)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool SidecarDatabase::migrateToV4() {
+    // Structural sections and candidate transition windows, stored as JSON.
+    for (const QString& statement : {
+                 QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
+                                "ADD COLUMN sections TEXT"),
+                 QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
+                                "ADD COLUMN entry_windows TEXT"),
+                 QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
+                                "ADD COLUMN exit_windows TEXT"),
          }) {
         if (!execStatement(m_database, statement)) {
             return false;

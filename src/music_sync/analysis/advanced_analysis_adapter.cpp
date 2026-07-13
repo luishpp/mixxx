@@ -92,6 +92,140 @@ QVector<PhraseMarker> AdvancedAnalysisAdapter::computePhrases(
     return out;
 }
 
+QVector<Section> AdvancedAnalysisAdapter::computeSections(
+        const QVector<float>& energy, std::int64_t durationMs) {
+    QVector<Section> out;
+    const int n = energy.size();
+    if (n == 0 || durationMs <= 0) {
+        return out;
+    }
+    const auto classOf = [](float e) -> int {
+        if (e < 0.4f) {
+            return 0; // low
+        }
+        if (e < 0.7f) {
+            return 1; // mid
+        }
+        return 2; // high
+    };
+    const double msPerPoint = static_cast<double>(durationMs) / n;
+    const auto appendSection = [&](int start, int end, int cls) {
+        double sum = 0.0;
+        for (int i = start; i < end; ++i) {
+            sum += energy[i];
+        }
+        Section section;
+        section.startMs = static_cast<std::int64_t>(start * msPerPoint);
+        section.endMs = static_cast<std::int64_t>(end * msPerPoint);
+        section.energy = static_cast<float>(sum / std::max(1, end - start));
+        const bool atStart = (start == 0);
+        const bool atEnd = (end == n);
+        if (cls == 2) {
+            section.type = QStringLiteral("Drop");
+        } else if (cls == 0 && atStart) {
+            section.type = QStringLiteral("Intro");
+        } else if (cls == 0 && atEnd) {
+            section.type = QStringLiteral("Outro");
+        } else if (cls == 0) {
+            section.type = QStringLiteral("Breakdown");
+        } else {
+            section.type = QStringLiteral("Groove");
+        }
+        section.confidence = 0.5f;
+        out.append(section);
+    };
+
+    int runStart = 0;
+    int runClass = classOf(energy[0]);
+    for (int i = 1; i < n; ++i) {
+        const int c = classOf(energy[i]);
+        if (c != runClass) {
+            appendSection(runStart, i, runClass);
+            runStart = i;
+            runClass = c;
+        }
+    }
+    appendSection(runStart, n, runClass);
+
+    // A groove immediately before a Drop is really a Build.
+    for (int i = 0; i + 1 < out.size(); ++i) {
+        if (out[i].type == QStringLiteral("Groove") &&
+                out[i + 1].type == QStringLiteral("Drop")) {
+            out[i].type = QStringLiteral("Build");
+        }
+    }
+    return out;
+}
+
+QVector<TransitionWindow> AdvancedAnalysisAdapter::computeTransitionWindows(
+        const QVector<float>& energy,
+        const QVector<PhraseMarker>& phrases,
+        std::int64_t durationMs,
+        bool entry) {
+    QVector<TransitionWindow> out;
+    const int n = energy.size();
+    if (n == 0 || phrases.isEmpty() || durationMs <= 0) {
+        return out;
+    }
+    const double entryMaxMs = 0.30 * durationMs;
+    const double exitMinMs = 0.60 * durationMs;
+
+    QVector<TransitionWindow> candidates;
+    for (int p = 0; p < phrases.size(); ++p) {
+        const std::int64_t startMs = phrases[p].startMs;
+        const std::int64_t endMs =
+                (p + 1 < phrases.size()) ? phrases[p + 1].startMs : durationMs;
+        if (endMs <= startMs) {
+            continue;
+        }
+        if (entry && static_cast<double>(startMs) > entryMaxMs) {
+            continue;
+        }
+        if (!entry && static_cast<double>(startMs) < exitMinMs) {
+            continue;
+        }
+
+        int i0 = static_cast<int>(static_cast<double>(startMs) / durationMs * n);
+        int i1 = static_cast<int>(static_cast<double>(endMs) / durationMs * n);
+        i0 = std::clamp(i0, 0, n - 1);
+        i1 = std::clamp(i1, i0 + 1, n);
+
+        double sum = 0.0;
+        for (int i = i0; i < i1; ++i) {
+            sum += energy[i];
+        }
+        const double mean = sum / (i1 - i0);
+        double variance = 0.0;
+        for (int i = i0; i < i1; ++i) {
+            const double d = energy[i] - mean;
+            variance += d * d;
+        }
+        variance /= (i1 - i0);
+        const float stability = static_cast<float>(1.0 - std::min(1.0, variance / 0.05));
+
+        TransitionWindow window;
+        window.kind = entry ? QStringLiteral("entry") : QStringLiteral("exit");
+        window.startMs = startMs;
+        window.endMs = endMs;
+        window.bars = phrases[p].bars;
+        window.energy = static_cast<float>(mean);
+        window.energyStability = stability;
+        window.instrumentalScore = 0.5f; // vocal analysis is a later phase
+        window.confidence = stability;
+        candidates.append(window);
+    }
+
+    std::sort(candidates.begin(),
+            candidates.end(),
+            [](const TransitionWindow& a, const TransitionWindow& b) {
+                return a.energyStability > b.energyStability;
+            });
+    for (int i = 0; i < candidates.size() && i < kMaxTransitionWindows; ++i) {
+        out.append(candidates[i]);
+    }
+    return out;
+}
+
 void AdvancedAnalysisAdapter::compute(
         const TrackPointer& pTrack, std::int64_t durationMs, TrackFeatures* pFeatures) {
     if (!pTrack || pFeatures == nullptr) {
@@ -134,6 +268,13 @@ void AdvancedAnalysisAdapter::compute(
         pFeatures->phrases =
                 computePhrases(firstBeatMs, bpm, durationMs, kBeatsPerBar, kBarsPerPhrase);
     }
+
+    // Sections + transition windows derived from the energy curve and phrases.
+    pFeatures->sections = computeSections(pFeatures->energyCurve, durationMs);
+    pFeatures->entryWindows = computeTransitionWindows(
+            pFeatures->energyCurve, pFeatures->phrases, durationMs, /*entry=*/true);
+    pFeatures->exitWindows = computeTransitionWindows(
+            pFeatures->energyCurve, pFeatures->phrases, durationMs, /*entry=*/false);
 }
 
 } // namespace mixxx::music_sync

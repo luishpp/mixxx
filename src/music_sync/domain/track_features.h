@@ -13,6 +13,27 @@ struct PhraseMarker {
     int bars = 0;
 };
 
+/// A structural section of the track (Intro/Groove/Build/Drop/Breakdown/Outro).
+struct Section {
+    QString type;
+    std::int64_t startMs = 0;
+    std::int64_t endMs = 0;
+    float energy = 0.0f;
+    float confidence = 0.0f;
+};
+
+/// A phrase-aligned candidate mixing window (an entry or an exit region).
+struct TransitionWindow {
+    QString kind; // "entry" | "exit"
+    std::int64_t startMs = 0;
+    std::int64_t endMs = 0;
+    int bars = 0;
+    float energy = 0.0f;
+    float energyStability = 0.0f;
+    float instrumentalScore = 0.0f;
+    float confidence = 0.0f;
+};
+
 /// Snapshot of a single track's native (Mixxx-provided) analysis data plus a
 /// few derived fields (Camelot, analyzed flag). BPM/key/beats remain owned by
 /// Mixxx; this is a cached, explainable view stored in the sidecar.
@@ -58,6 +79,9 @@ struct TrackFeatures {
     QVector<float> energyCurve;    // per-track normalized energy (0..1)
     QVector<float> bassCurve;      // per-track normalized bass presence (0..1)
     QVector<PhraseMarker> phrases; // heuristic phrase boundaries
+    QVector<Section> sections;     // heuristic structural sections
+    QVector<TransitionWindow> entryWindows;
+    QVector<TransitionWindow> exitWindows;
     QString advancedAnalyzerVersion;
 
     // Provenance.

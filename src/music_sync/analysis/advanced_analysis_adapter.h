@@ -34,6 +34,7 @@ class AdvancedAnalysisAdapter {
     static constexpr int kEnergyCurvePoints = 64;
     static constexpr int kBeatsPerBar = 4;
     static constexpr int kBarsPerPhrase = 16;
+    static constexpr int kMaxTransitionWindows = 3;
 
     /// Buckets per-frame band samples into `numBuckets` and returns per-track
     /// normalized energy (low+mid+high) and bass (low) curves plus an overall
@@ -49,6 +50,20 @@ class AdvancedAnalysisAdapter {
             std::int64_t durationMs,
             int beatsPerBar,
             int barsPerPhrase);
+
+    /// Coarse structural sections from the normalized energy curve: Intro/Outro
+    /// at the low-energy ends, Drop at high energy, Breakdown at a mid-track
+    /// low-energy dip, Build before a Drop, Groove otherwise.
+    static QVector<Section> computeSections(
+            const QVector<float>& energyCurve, std::int64_t durationMs);
+
+    /// Phrase-aligned candidate mixing windows, ranked by energy stability.
+    /// `entry` restricts to the first 30% of the track; otherwise the last 40%.
+    static QVector<TransitionWindow> computeTransitionWindows(
+            const QVector<float>& energyCurve,
+            const QVector<PhraseMarker>& phrases,
+            std::int64_t durationMs,
+            bool entry);
 
     /// Fills the advanced fields of `pFeatures` (native fields already set) by
     /// reading pTrack's waveform summary and tempo. A no-op when data is absent.
