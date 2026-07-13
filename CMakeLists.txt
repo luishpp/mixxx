@@ -3963,12 +3963,22 @@ if(MUSIC_SYNC_ENABLED)
     src/music_sync/sidecar_database.h
     src/music_sync/sidecar_database.cpp
     src/music_sync/domain/track_features.h
+    src/music_sync/domain/mix_intent.h
+    src/music_sync/domain/arrangement.h
     src/music_sync/analysis/native_analysis_adapter.h
     src/music_sync/analysis/native_analysis_adapter.cpp
     src/music_sync/analysis/analysis_repository.h
     src/music_sync/analysis/analysis_repository.cpp
     src/music_sync/analysis/advanced_analysis_adapter.h
     src/music_sync/analysis/advanced_analysis_adapter.cpp
+    src/music_sync/planner/harmonic_compatibility.h
+    src/music_sync/planner/harmonic_compatibility.cpp
+    src/music_sync/planner/energy_curve.h
+    src/music_sync/planner/energy_curve.cpp
+    src/music_sync/planner/pair_scorer.h
+    src/music_sync/planner/pair_scorer.cpp
+    src/music_sync/planner/explanation_builder.h
+    src/music_sync/planner/explanation_builder.cpp
     src/music_sync/music_sync_controller.h
     src/music_sync/music_sync_controller.cpp
     src/music_sync/dlg_music_sync.h
@@ -3979,6 +3989,7 @@ if(MUSIC_SYNC_ENABLED)
       src/test/music_sync_sidecar_test.cpp
       src/test/music_sync_analysis_test.cpp
       src/test/music_sync_advanced_test.cpp
+      src/test/music_sync_planner_test.cpp
     )
     # Register with ctest here: the main gtest_add_tests() call runs before this
     # block, so it would not see a source added afterwards.
@@ -3988,6 +3999,7 @@ if(MUSIC_SYNC_ENABLED)
         src/test/music_sync_sidecar_test.cpp
         src/test/music_sync_analysis_test.cpp
         src/test/music_sync_advanced_test.cpp
+        src/test/music_sync_planner_test.cpp
       EXTRA_ARGS --logLevel info
       WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
       TEST_LIST musicSyncTestsuite
