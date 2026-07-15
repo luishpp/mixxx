@@ -11,6 +11,7 @@
 #include "analyzer/analyzerscheduledtrack.h"
 #include "analyzer/analyzerthread.h"
 #include "coreservices.h"
+#include "library/dao/analysisdao.h"
 #include "library/library.h"
 #include "library/trackcollection.h"
 #include "library/trackcollectionmanager.h"
@@ -27,12 +28,40 @@
 #include "track/track.h"
 #include "track/trackid.h"
 #include "util/logger.h"
+#include "waveform/waveform.h"
+#include "waveform/waveformfactory.h"
 
 namespace {
 const mixxx::Logger kLogger("music_sync");
 
 const QString kSidecarFileName = QStringLiteral("music-sync-dj.sqlite");
 const QString kSettingModuleEnabled = QStringLiteral("module_enabled");
+
+// A cold library track has no waveform summary in memory, so the advanced
+// analysis (energy/sections/transition windows) would come up empty. Load the
+// already-stored overview from the library DB (no decode, no audio thread) so
+// getWaveformSummary() returns data. Silently leaves it null if the track was
+// never waveform-analyzed.
+void ensureWaveformSummaryLoaded(
+        TrackCollection* pCollection, const TrackPointer& pTrack, TrackId trackId) {
+    if (!pCollection || !pTrack || !pTrack->getWaveformSummary().isNull()) {
+        return;
+    }
+    const QList<AnalysisDao::AnalysisInfo> analyses =
+            pCollection->getAnalysisDAO().getAnalysesForTrackByType(
+                    trackId, AnalysisDao::TYPE_WAVESUMMARY);
+    for (const AnalysisDao::AnalysisInfo& analysis : analyses) {
+        if (WaveformFactory::waveformSummaryVersionToVersionClass(analysis.version) !=
+                WaveformFactory::VC_USE) {
+            continue;
+        }
+        ConstWaveformPointer pSummary(WaveformFactory::loadWaveformFromAnalysis(analysis));
+        if (!pSummary.isNull()) {
+            pTrack->setWaveformSummary(pSummary);
+            return;
+        }
+    }
+}
 } // anonymous namespace
 
 namespace mixxx::music_sync {
@@ -140,6 +169,7 @@ QVector<TrackFeatures> MusicSyncController::snapshotLibrary(int limit) {
         if (!pTrack) {
             continue;
         }
+        ensureWaveformSummaryLoaded(pCollection, pTrack, trackId);
         TrackFeatures features = NativeAnalysisAdapter::extract(pTrack);
         AdvancedAnalysisAdapter::compute(pTrack, features.durationMs, &features);
         repository.upsert(features);
@@ -224,8 +254,11 @@ int MusicSyncController::analyzeMissing(int limit) {
     const int numThreads = std::max(1, QThread::idealThreadCount());
     m_pScheduler = pLibrary->createTrackAnalysisScheduler(
             numThreads,
-            static_cast<AnalyzerModeFlags>(
-                    AnalyzerModeFlags::WithBeats | AnalyzerModeFlags::LowPriority));
+            // WithWaveform is required: the advanced analysis (energy/sections/
+            // transition windows) reads the waveform summary, so beats alone
+            // would leave every transition on the Auto DJ fallback path.
+            static_cast<AnalyzerModeFlags>(AnalyzerModeFlags::WithBeats |
+                    AnalyzerModeFlags::WithWaveform | AnalyzerModeFlags::LowPriority));
 
     connect(m_pScheduler.get(),
             &TrackAnalysisScheduler::progress,
