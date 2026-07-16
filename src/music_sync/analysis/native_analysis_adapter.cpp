@@ -26,6 +26,31 @@ std::optional<std::int64_t> framePosToMs(mixxx::audio::FramePos pos, double samp
     return static_cast<std::int64_t>(std::llround(pos.value() / sampleRate * 1000.0));
 }
 
+/// Parses the set-plan tag the track prep writes into the comment, e.g.
+/// "ATO 5 | ÂNCORA | MELODIC TECHNO | 126 BPM | ESCURIDÃO" -> act 5, "ÂNCORA".
+/// Anything else (an ordinary comment, "EXTRA | ...", empty) leaves act 0, so a
+/// library that was never prepped simply has no acts and nothing breaks.
+void parseSetPlanComment(const QString& comment, int* pAct, QString* pFunction) {
+    if (comment.isEmpty()) {
+        return;
+    }
+    const QStringList fields = comment.split(QChar('|'));
+    if (fields.isEmpty()) {
+        return;
+    }
+    const QString first = fields.at(0).trimmed();
+    if (first.startsWith(QStringLiteral("ATO "), Qt::CaseInsensitive)) {
+        bool ok = false;
+        const int act = first.mid(4).trimmed().toInt(&ok);
+        if (ok && act >= 1 && act <= 7) {
+            *pAct = act;
+        }
+    }
+    if (fields.size() > 1) {
+        *pFunction = fields.at(1).trimmed();
+    }
+}
+
 } // anonymous namespace
 
 namespace mixxx::music_sync {
@@ -56,6 +81,7 @@ TrackFeatures NativeAnalysisAdapter::extract(const TrackPointer& pTrack) {
     f.artist = pTrack->getArtist();
     f.album = pTrack->getAlbum();
     f.genre = pTrack->getGenre();
+    parseSetPlanComment(pTrack->getComment(), &f.act, &f.setFunction);
 
     const double sampleRate = pTrack->getSampleRate().toDouble();
     f.durationMs = static_cast<std::int64_t>(std::llround(pTrack->getDuration() * 1000.0));

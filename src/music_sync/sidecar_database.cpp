@@ -119,6 +119,9 @@ bool SidecarDatabase::applyMigrations() {
         case 4:
             ok = migrateToV4();
             break;
+        case 5:
+            ok = migrateToV5();
+            break;
         default:
             kLogger.warning() << "No migration defined for version" << version;
             ok = false;
@@ -228,6 +231,21 @@ bool SidecarDatabase::migrateToV4() {
                                 "ADD COLUMN entry_windows TEXT"),
                  QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
                                 "ADD COLUMN exit_windows TEXT"),
+         }) {
+        if (!execStatement(m_database, statement)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool SidecarDatabase::migrateToV5() {
+    // The track's place in the set narrative, parsed from its comment tag.
+    for (const QString& statement : {
+                 QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
+                                "ADD COLUMN act INTEGER DEFAULT 0"),
+                 QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
+                                "ADD COLUMN set_function TEXT"),
          }) {
         if (!execStatement(m_database, statement)) {
             return false;

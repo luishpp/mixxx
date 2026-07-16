@@ -1,6 +1,7 @@
 #include "music_sync/planner/sequence_optimizer.h"
 
 #include <QHash>
+#include <QMap>
 #include <algorithm>
 #include <cmath>
 
@@ -41,6 +42,60 @@ double routeTotal(const QVector<int>& route, const Matrix& m) {
     return sum / (route.size() - 1);
 }
 
+/// Rebuilds an Arrangement from a final track order, recomputing every pair from
+/// scratch. Used by the act path: concatenating per-act routes creates new pairs
+/// at the act boundaries that no sub-arrangement ever scored.
+Arrangement buildFromOrderedTracks(const QVector<TrackFeatures>& ordered,
+        const ScoringWeights& weights,
+        double maxTempoPct,
+        const QVector<EnergyPoint>& curve) {
+    Arrangement arr;
+    arr.algorithmVersion = SequenceOptimizer::kAlgorithmVersion;
+    int tempoWarnings = 0;
+    double pairSum = 0.0;
+    for (int pos = 0; pos < ordered.size(); ++pos) {
+        const TrackFeatures& track = ordered.at(pos);
+        ArrangementItem item;
+        item.mixxxTrackId = track.mixxxTrackId;
+        item.position = pos;
+        if (pos > 0) {
+            const TrackFeatures& prev = ordered.at(pos - 1);
+            const PairScoreBreakdown bd =
+                    PairScorer::score(prev, track, weights, maxTempoPct);
+            item.pairScoreFromPrevious = bd.total;
+            item.explanationFromPrevious = ExplanationBuilder::forPair(prev, track, bd);
+            pairSum += bd.total;
+            if (bd.tempoChangePercent > maxTempoPct) {
+                ++tempoWarnings;
+            }
+        }
+        arr.totalDurationMs += track.durationMs;
+        arr.items.append(item);
+    }
+    arr.totalScore = ordered.size() > 1 ? pairSum / (ordered.size() - 1)
+                                        : (ordered.isEmpty() ? 0.0 : 1.0);
+
+    if (ordered.size() < 2 || curve.isEmpty()) {
+        arr.energyFitScore = 0.5;
+    } else {
+        double err = 0.0;
+        for (int pos = 0; pos < ordered.size(); ++pos) {
+            const double p = static_cast<double>(pos) / (ordered.size() - 1);
+            err += std::abs(ordered.at(pos).overallEnergy - EnergyCurve::energyAt(curve, p));
+        }
+        arr.energyFitScore = std::clamp(1.0 - err / ordered.size(), 0.0, 1.0);
+    }
+    if (tempoWarnings > 0) {
+        arr.warnings.append(QStringLiteral("%1 transition(s) exceed the tempo tolerance")
+                                    .arg(tempoWarnings));
+    }
+    arr.explanation = QStringLiteral("%1 tracks, avg compatibility %2%, energy fit %3%")
+                              .arg(ordered.size())
+                              .arg(qRound(arr.totalScore * 100.0))
+                              .arg(qRound(arr.energyFitScore * 100.0));
+    return arr;
+}
+
 } // anonymous namespace
 
 QVector<Arrangement> SequenceOptimizer::arrange(
@@ -54,6 +109,66 @@ QVector<Arrangement> SequenceOptimizer::arrange(
     const double maxTempoPct = options.intent.maxTempoChangePercent > 0.0
             ? options.intent.maxTempoChangePercent
             : tempo_tolerance::kBalanced;
+
+    // --- Hybrid curation: the narrative (acts) constrains the order; the engine
+    // only optimizes inside each act. Without this the optimizer maximizes pair
+    // scores globally and happily puts an Act 6 trance track after an Act 3
+    // groove — musically smooth, narratively wrong.
+    if (options.respectActs) {
+        QMap<int, QVector<TrackFeatures>> byAct; // QMap iterates keys ascending
+        for (const TrackFeatures& track : tracks) {
+            byAct[track.act].append(track);
+        }
+        QVector<int> actOrder;
+        for (auto it = byAct.cbegin(); it != byAct.cend(); ++it) {
+            if (it.key() > 0) {
+                actOrder.append(it.key());
+            }
+        }
+        if (byAct.contains(0)) {
+            actOrder.append(0); // unknown/extra tracks close the set
+        }
+        // One group = nothing to constrain; fall through (also ends the recursion).
+        if (actOrder.size() > 1) {
+            Options sub = options;
+            sub.respectActs = false;
+            sub.locks.clear(); // lock positions are global; meaningless per act
+            QVector<QVector<Arrangement>> perAct;
+            for (int act : actOrder) {
+                perAct.append(arrange(byAct.value(act), sub));
+            }
+
+            const QVector<EnergyPoint> actCurve = EnergyCurve::forIntent(options.intent);
+            QHash<std::int64_t, TrackFeatures> byId;
+            for (const TrackFeatures& track : tracks) {
+                byId.insert(track.mixxxTrackId, track);
+            }
+            for (int k = 0; k < options.numAlternatives; ++k) {
+                QVector<TrackFeatures> ordered;
+                bool fresh = false; // did any act actually offer a k-th variant?
+                for (const QVector<Arrangement>& alternatives : perAct) {
+                    if (alternatives.isEmpty()) {
+                        continue;
+                    }
+                    const int pick =
+                            std::min(k, static_cast<int>(alternatives.size()) - 1);
+                    if (pick == k) {
+                        fresh = true;
+                    }
+                    for (const ArrangementItem& item : alternatives.at(pick).items) {
+                        ordered.append(byId.value(item.mixxxTrackId));
+                    }
+                }
+                if (ordered.isEmpty() || (k > 0 && !fresh)) {
+                    break; // no act has anything new left: stop inventing duplicates
+                }
+                result.append(buildFromOrderedTracks(
+                        ordered, options.weights, maxTempoPct, actCurve));
+            }
+            return result;
+        }
+    }
+
     const Matrix m = buildMatrix(tracks, options.weights, maxTempoPct);
     const QVector<EnergyPoint> curve = EnergyCurve::forIntent(options.intent);
 

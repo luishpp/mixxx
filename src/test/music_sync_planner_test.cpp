@@ -235,6 +235,84 @@ TEST(MusicSyncTransitionTest, CutWhenIncompatible) {
     EXPECT_LE(p.durationBars, 8); // a cut is short
 }
 
+TrackFeatures makeActTrack(std::int64_t id, int act, double bpm, const QString& camelot) {
+    TrackFeatures f = makeTrack(id, bpm, camelot, 0.5);
+    f.act = act;
+    return f;
+}
+
+int actOf(const QVector<TrackFeatures>& tracks, std::int64_t id) {
+    for (const TrackFeatures& f : tracks) {
+        if (f.mixxxTrackId == id) {
+            return f.act;
+        }
+    }
+    return -1;
+}
+
+TEST(MusicSyncOptimizerTest, ActsConstrainTheOrder) {
+    // Act 3 tracks are deliberately the most compatible with the act 1 opener,
+    // so a purely score-driven optimizer would interleave them. The narrative
+    // must win: every act 1 track comes before every act 2, and so on.
+    QVector<TrackFeatures> tracks;
+    tracks.append(makeActTrack(1, 1, 124.0, QStringLiteral("8A")));
+    tracks.append(makeActTrack(2, 3, 124.0, QStringLiteral("8A")));
+    tracks.append(makeActTrack(3, 2, 130.0, QStringLiteral("3B")));
+    tracks.append(makeActTrack(4, 1, 124.5, QStringLiteral("9A")));
+    tracks.append(makeActTrack(5, 3, 124.0, QStringLiteral("8A")));
+    tracks.append(makeActTrack(6, 2, 129.0, QStringLiteral("3B")));
+
+    SequenceOptimizer::Options options;
+    options.numAlternatives = 3;
+    const QVector<Arrangement> out = SequenceOptimizer::arrange(tracks, options);
+
+    ASSERT_FALSE(out.isEmpty());
+    const Arrangement& best = out.first();
+    ASSERT_EQ(best.items.size(), tracks.size()); // nobody dropped
+    int previousAct = 0;
+    for (const ArrangementItem& item : best.items) {
+        const int act = actOf(tracks, item.mixxxTrackId);
+        EXPECT_GE(act, previousAct) << "acts must never go backwards";
+        previousAct = act;
+    }
+}
+
+TEST(MusicSyncOptimizerTest, TracksWithoutActGoLast) {
+    QVector<TrackFeatures> tracks;
+    tracks.append(makeActTrack(1, 0, 124.0, QStringLiteral("8A"))); // extra
+    tracks.append(makeActTrack(2, 1, 124.0, QStringLiteral("8A")));
+    tracks.append(makeActTrack(3, 2, 124.0, QStringLiteral("8A")));
+
+    SequenceOptimizer::Options options;
+    const QVector<Arrangement> out = SequenceOptimizer::arrange(tracks, options);
+    ASSERT_FALSE(out.isEmpty());
+    const QVector<ArrangementItem>& items = out.first().items;
+    ASSERT_EQ(items.size(), 3);
+    EXPECT_EQ(actOf(tracks, items.last().mixxxTrackId), 0);
+}
+
+TEST(MusicSyncOptimizerTest, NoActsBehavesLikeBefore) {
+    // A library that was never prepped has no acts: one group, so the act path
+    // must fall through to the plain global optimization.
+    QVector<TrackFeatures> tracks;
+    tracks.append(makeActTrack(1, 0, 124.0, QStringLiteral("8A")));
+    tracks.append(makeActTrack(2, 0, 124.5, QStringLiteral("9A")));
+    tracks.append(makeActTrack(3, 0, 125.0, QStringLiteral("8A")));
+
+    SequenceOptimizer::Options options;
+    const QVector<Arrangement> out = SequenceOptimizer::arrange(tracks, options);
+    ASSERT_FALSE(out.isEmpty());
+    // Every track routed exactly once, as the plain path has always done. (How
+    // many distinct alternatives come out depends on route diversity — with
+    // near-identical tracks 2-opt converges to one, which is not a defect.)
+    EXPECT_EQ(out.first().items.size(), 3);
+    QSet<std::int64_t> seen;
+    for (const ArrangementItem& item : out.first().items) {
+        seen.insert(item.mixxxTrackId);
+    }
+    EXPECT_EQ(seen.size(), 3);
+}
+
 TrackFeatures makeEnergyTrack(std::int64_t id, double energy) {
     TrackFeatures f;
     f.mixxxTrackId = id;

@@ -165,13 +165,19 @@ void PreviewExecutor::begin() {
     m_startPos01 = m_source.playPosition->get();
     m_refBpm = m_source.bpm && m_source.bpm->get() > 0.0 ? m_source.bpm->get() : 128.0;
 
-    // Beat-match the target to the source, then start both from their cue
-    // points; the automation blends them.
-    m_target.syncEnabled->set(1.0);
+    // Only tempo-lock when the transition actually overlaps both tracks. A cut
+    // (or the Auto DJ fallback) is chosen precisely BECAUSE the tempos clash;
+    // syncing there would drag the incoming track to a foreign tempo — e.g. a
+    // 140 BPM track pulled to 112 is a 20% stretch — which is the opposite of
+    // what a cut is for (spec 16 / 19.6).
+    const bool beatSync = m_program.needsBeatSync();
+    m_target.syncEnabled->set(beatSync ? 1.0 : 0.0);
     m_source.play->set(1.0);
     m_target.play->set(1.0);
 
-    setState(State::Transitioning, QStringLiteral("Running transition"));
+    setState(State::Transitioning,
+            beatSync ? QStringLiteral("Running transition (beat-synced)")
+                     : QStringLiteral("Running transition (no sync: each track keeps its tempo)"));
     m_pTimer->start();
 }
 

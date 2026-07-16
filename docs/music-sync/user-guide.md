@@ -105,8 +105,17 @@ combo sozinho não faz nada.
 ### ▸ Generate sequence
 
 Precisa de **pelo menos 2 faixas analisadas** no sidecar (senão avisa). Roda o otimizador
-(guloso + 2-opt, posições travadas, determinístico), produz **até 3 alternativas**, mostra a
-melhor e abre o diálogo de resultado.
+(guloso + 2-opt, determinístico), produz **até 3 alternativas**, mostra a melhor e abre o
+diálogo de resultado.
+
+**Curadoria híbrida — o ato manda.** Se as faixas têm o ato no comentário
+(`ATO 5 | ÂNCORA | ...`), a ordem **segue a narrativa**: o motor otimiza **dentro** de cada ato e
+nunca troca faixas entre atos. Faixas sem ato (`EXTRA`) vão para o fim. Sem isso o otimizador
+maximiza compatibilidade globalmente e coloca um trance do Ato 6 depois de um groove do Ato 3 —
+harmonicamente suave, narrativamente errado.
+
+> Se a sua biblioteca não tem o comentário de ato, nada muda: cai na otimização global de sempre.
+> Para ganhar os atos, prepare os arquivos com o comentário do §3 do plano.
 
 ---
 
@@ -161,9 +170,14 @@ Por par consecutivo:
 
 `[seletor de par]` **Preview on decks** · **Repeat** · **Cancel preview** + rótulo de estado.
 
-- **Preview on decks**: carrega A no deck 1 e B no deck 2, posiciona nos pontos planejados,
-  **beat-matcha** (sync no deck B) e executa a automação (crossfader/volumes/EQ) guiada pela
-  **posição de reprodução** do deck A — não por relógio.
+- **Preview on decks**: carrega A no deck 1 e B no deck 2, posiciona nos pontos planejados e
+  executa a automação (crossfader/volumes/EQ) guiada pela **posição de reprodução** do deck A —
+  não por relógio.
+- **Sync só quando faz sentido**: nas mesclas (EQ Blend, Bass Swap, Crossfade, Filter) o deck B é
+  beat-matchado ao A. Em **Cut on phrase** e **Auto DJ fallback**, **não** — essas transições
+  existem justamente porque os tempos são incompatíveis, e sincronizar arrastaria a faixa nova
+  para um tempo estranho (ex.: 140 BPM puxada para 112 = 20% de stretch). Cada faixa mantém o
+  tempo dela e a troca é na frase.
 - **Repeat**: re-posiciona e executa de novo.
 - **Cancel preview**: para a automação **sem cortar o áudio** e devolve os decks.
 - **Fechar o diálogo cancela** um preview em andamento.

@@ -4,6 +4,8 @@
 #include <QVector>
 #include <cstdint>
 
+#include "music_sync/domain/transition_plan.h"
+
 namespace mixxx::music_sync {
 
 /// One scheduled control write, beat-relative to the start of the transition.
@@ -23,6 +25,11 @@ struct ControlWrite {
 /// ControlWrites, so the executor only has to fire writes as playback crosses
 /// each beat — no interpolation or optimization on the audio path.
 struct PreviewProgram {
+    /// The strategy this program came from. The executor needs it: a
+    /// CutOnPhrase exists *because* the tempos are incompatible, so beat-syncing
+    /// the target would defeat it (spec 16, "troca por breakdown").
+    TransitionType type = TransitionType::Crossfade;
+
     std::int64_t sourceTrackId = -1;
     std::int64_t targetTrackId = -1;
 
@@ -47,6 +54,14 @@ struct PreviewProgram {
     /// Beat offset -> milliseconds at the target BPM.
     double beatToMs(double beat) const {
         return targetBpm > 0.0 ? beat * 60000.0 / targetBpm : 0.0;
+    }
+
+    /// Whether the two decks should be tempo-locked. Blends overlap both tracks,
+    /// so they must share a tempo; a cut or the Auto DJ fallback hands over
+    /// instead, and each track keeps its own.
+    bool needsBeatSync() const {
+        return type != TransitionType::CutOnPhrase &&
+                type != TransitionType::AutoDjFallback;
     }
 };
 

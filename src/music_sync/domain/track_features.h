@@ -74,6 +74,15 @@ struct TrackFeatures {
     // Our derived analysis status (matches how Mixxx gates re-analysis).
     bool analyzed = false;
 
+    // --- Set plan (parsed from the track comment written by the set prep, e.g.
+    // "ATO 5 | ÂNCORA | MELODIC TECHNO | 126 BPM | ESCURIDÃO") ---
+    /// 1..7 = the act this track belongs to in the narrative; 0 = unknown/extra.
+    /// Drives the hybrid curation: the order follows the acts, the engine
+    /// optimizes inside each one.
+    int act = 0;
+    /// ÂNCORA / PONTE / FLASH / CODA / ... — its role in the set (spec 9).
+    QString setFunction;
+
     // --- Fase 3: advanced analysis, derived from the Mixxx waveform + tempo ---
     double overallEnergy = 0.0;    // mean energy 0..1, comparable across tracks
     QVector<float> energyCurve;    // per-track normalized energy (0..1)

@@ -82,6 +82,28 @@ TEST(MusicSyncPreviewTest, ZeroLengthRampEmitsEndpoint) {
     EXPECT_DOUBLE_EQ(program.writes.first().value, 0.9);
 }
 
+TEST(MusicSyncPreviewTest, BeatSyncOnlyForBlendingTransitions) {
+    // A cut is chosen BECAUSE the tempos clash, so the executor must not drag
+    // the incoming track to the outgoing one's tempo.
+    const auto programFor = [](TransitionType type) {
+        TransitionPlan plan;
+        plan.type = type;
+        return PreviewCompiler::compile(plan);
+    };
+    EXPECT_TRUE(programFor(TransitionType::Crossfade).needsBeatSync());
+    EXPECT_TRUE(programFor(TransitionType::EqBlend).needsBeatSync());
+    EXPECT_TRUE(programFor(TransitionType::BassSwap).needsBeatSync());
+    EXPECT_TRUE(programFor(TransitionType::FilterTransition).needsBeatSync());
+    EXPECT_FALSE(programFor(TransitionType::CutOnPhrase).needsBeatSync());
+    EXPECT_FALSE(programFor(TransitionType::AutoDjFallback).needsBeatSync());
+}
+
+TEST(MusicSyncPreviewTest, CopiesTransitionType) {
+    TransitionPlan plan;
+    plan.type = TransitionType::BassSwap;
+    EXPECT_EQ(PreviewCompiler::compile(plan).type, TransitionType::BassSwap);
+}
+
 TEST(MusicSyncPreviewTest, CopiesPlanMetadata) {
     TransitionPlan plan;
     plan.sourceTrackId = 7;

@@ -7,6 +7,7 @@ namespace mixxx::music_sync {
 
 PreviewProgram PreviewCompiler::compile(const TransitionPlan& plan, double stepBeats) {
     PreviewProgram program;
+    program.type = plan.type;
     program.sourceTrackId = plan.sourceTrackId;
     program.targetTrackId = plan.targetTrackId;
     program.sourceStartMs = plan.sourceExitMs;

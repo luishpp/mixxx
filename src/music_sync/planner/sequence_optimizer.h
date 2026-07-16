@@ -31,6 +31,14 @@ class SequenceOptimizer {
         QVector<LockedPosition> locks;
         int numAlternatives = 3;
         int twoOptPasses = 2;
+        /// Hybrid curation: when the tracks carry acts (TrackFeatures::act, 1..7),
+        /// the order must follow the narrative — the engine optimizes *inside*
+        /// each act and never reorders across them. Tracks without an act (0) go
+        /// last. With no acts present this changes nothing, so a library that was
+        /// never prepped still gets a plain global optimization.
+        /// Note: `locks` are not applied on the act path (acts already pin the
+        /// coarse order); locking individual anchors is a later refinement.
+        bool respectActs = true;
     };
 
     /// Returns ranked candidate arrangements (best first). May return fewer than
