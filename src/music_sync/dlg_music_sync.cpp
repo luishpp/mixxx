@@ -15,7 +15,6 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
-#include <algorithm>
 #include <cmath>
 
 #include "coreservices.h"
@@ -360,34 +359,19 @@ void DlgMusicSync::slotGenerateSequence() {
     // --- Fase 6: two-deck preview of a chosen consecutive pair ---
     auto* previewRow = new QHBoxLayout();
     auto* pairSelector = new QComboBox(&dialog);
-    {
-        struct PairEntry {
-            QString sortKey; // titles only: drives the alphabetical order
-            QString label;   // shown: set position + titles
-            int index;       // position in the arrangement (the item data)
-        };
-        QVector<PairEntry> entries;
-        for (int i = 0; i + 1 < best.items.size(); ++i) {
-            const TrackFeatures a = byId.value(best.items.at(i).mixxxTrackId);
-            const TrackFeatures b = byId.value(best.items.at(i + 1).mixxxTrackId);
-            const QString text = QStringLiteral("%1 → %2").arg(
-                    a.title.isEmpty() ? dashIfEmpty(a.artist) : a.title,
-                    b.title.isEmpty() ? dashIfEmpty(b.artist) : b.title);
-            // Sorting by title detaches the list from the numbered report above,
-            // so keep the set position in the label.
-            entries.append({text,
-                    QStringLiteral("%1. %2").arg(i + 1, 2, 10, QChar('0')).arg(text),
-                    i});
-        }
-        std::sort(entries.begin(),
-                entries.end(),
-                [](const PairEntry& x, const PairEntry& y) {
-                    const int cmp = QString::compare(x.sortKey, y.sortKey, Qt::CaseInsensitive);
-                    return cmp != 0 ? cmp < 0 : x.index < y.index;
-                });
-        for (const PairEntry& entry : entries) {
-            pairSelector->addItem(entry.label, entry.index);
-        }
+    // Listed in set order (ascending position), which is the narrative order:
+    // the optimizer keeps the acts in sequence, so pair 1 is the opening
+    // transition and the last one closes the set. This also matches the
+    // numbered report above.
+    for (int i = 0; i + 1 < best.items.size(); ++i) {
+        const TrackFeatures a = byId.value(best.items.at(i).mixxxTrackId);
+        const TrackFeatures b = byId.value(best.items.at(i + 1).mixxxTrackId);
+        pairSelector->addItem(
+                QStringLiteral("%1. %2 → %3")
+                        .arg(i + 1, 2, 10, QChar('0'))
+                        .arg(a.title.isEmpty() ? dashIfEmpty(a.artist) : a.title,
+                                b.title.isEmpty() ? dashIfEmpty(b.artist) : b.title),
+                i);
     }
     auto* previewButton = new QPushButton(tr("Preview on decks"), &dialog);
     auto* repeatButton = new QPushButton(tr("Repeat"), &dialog);
