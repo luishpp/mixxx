@@ -139,4 +139,48 @@ TEST(MusicSyncAdvancedTest, ComputeTransitionWindowsEntryExit) {
     EXPECT_GT(exit.first().energyStability, 0.9f); // flat energy is stable
 }
 
+TEST(MusicSyncAdvancedTest, TransitionWindowsMergePhrasesToPreferredLength) {
+    const QVector<float> energy(64, 0.5f);
+    QVector<mixxx::music_sync::PhraseMarker> phrases;
+    // A 16-bar phrase grid must still be able to yield a 32-bar window.
+    for (int i = 0; i < 8; ++i) {
+        phrases.append({i * 30000, 16});
+    }
+    const auto exitWindows = AdvancedAnalysisAdapter::computeTransitionWindows(
+            energy, phrases, 240000, false);
+    ASSERT_FALSE(exitWindows.isEmpty());
+    EXPECT_EQ(exitWindows.first().bars,
+            AdvancedAnalysisAdapter::kPreferredWindowBars); // 16 + 16
+    EXPECT_GT(exitWindows.first().endMs, exitWindows.first().startMs);
+}
+
+TEST(MusicSyncAdvancedTest, TransitionWindowsDropShortTailStub) {
+    const QVector<float> energy(64, 0.5f);
+    QVector<mixxx::music_sync::PhraseMarker> phrases;
+    phrases.append({0, 16});
+    phrases.append({64000, 16});
+    phrases.append({96000, 2}); // truncated tail: not a usable blend on its own
+    const auto exitWindows = AdvancedAnalysisAdapter::computeTransitionWindows(
+            energy, phrases, 100000, false);
+    for (const auto& window : exitWindows) {
+        EXPECT_GE(window.bars, AdvancedAnalysisAdapter::kMinWindowBars);
+        EXPECT_NE(window.startMs, 96000); // the stub never becomes a window
+    }
+}
+
+TEST(MusicSyncAdvancedTest, TransitionWindowsPreferLongerOverShortStable) {
+    // Both candidates sit on perfectly flat (max-stability) energy; the longer
+    // one must win, since a short window only looks stable for lack of samples.
+    const QVector<float> energy(64, 0.5f);
+    QVector<mixxx::music_sync::PhraseMarker> phrases;
+    phrases.append({120000, 16});
+    phrases.append({150000, 16}); // merges with the previous -> 32 bars
+    phrases.append({180000, 10}); // shorter standalone candidate
+    const auto exitWindows = AdvancedAnalysisAdapter::computeTransitionWindows(
+            energy, phrases, 200000, false);
+    ASSERT_GE(exitWindows.size(), 2);
+    EXPECT_EQ(exitWindows.first().bars, AdvancedAnalysisAdapter::kPreferredWindowBars);
+    EXPECT_GE(exitWindows.first().confidence, exitWindows.last().confidence);
+}
+
 } // namespace

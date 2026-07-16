@@ -8,6 +8,7 @@
 #include "music_sync/planner/energy_curve.h"
 #include "music_sync/planner/explanation_builder.h"
 #include "music_sync/planner/harmonic_compatibility.h"
+#include "music_sync/planner/energy_normalizer.h"
 #include "music_sync/planner/pair_scorer.h"
 #include "music_sync/planner/sequence_optimizer.h"
 #include "music_sync/planner/transition_planner.h"
@@ -232,6 +233,66 @@ TEST(MusicSyncTransitionTest, CutWhenIncompatible) {
     const TransitionPlan p = TransitionPlanner::plan(a, b, intent);
     EXPECT_EQ(p.type, TransitionType::CutOnPhrase);
     EXPECT_LE(p.durationBars, 8); // a cut is short
+}
+
+TrackFeatures makeEnergyTrack(std::int64_t id, double energy) {
+    TrackFeatures f;
+    f.mixxxTrackId = id;
+    f.overallEnergy = energy;
+    f.energyCurve = QVector<float>(4, 0.5f);
+    return f;
+}
+
+TEST(MusicSyncEnergyNormalizerTest, SpreadsToFullRangeByRank) {
+    QVector<TrackFeatures> tracks;
+    tracks.append(makeEnergyTrack(1, 0.30));
+    tracks.append(makeEnergyTrack(2, 0.20));
+    tracks.append(makeEnergyTrack(3, 0.25));
+    normalizeLibraryEnergy(&tracks);
+    EXPECT_DOUBLE_EQ(tracks.at(1).overallEnergy, 0.0); // lowest raw (0.20)
+    EXPECT_DOUBLE_EQ(tracks.at(2).overallEnergy, 0.5); // middle (0.25)
+    EXPECT_DOUBLE_EQ(tracks.at(0).overallEnergy, 1.0); // highest (0.30)
+}
+
+TEST(MusicSyncEnergyNormalizerTest, IgnoresTracksWithoutEnergyCurve) {
+    QVector<TrackFeatures> tracks;
+    tracks.append(makeEnergyTrack(1, 0.20));
+    tracks.append(makeEnergyTrack(2, 0.30));
+    TrackFeatures noCurve; // never waveform-analyzed
+    noCurve.mixxxTrackId = 3;
+    noCurve.overallEnergy = 0.99;
+    tracks.append(noCurve);
+    normalizeLibraryEnergy(&tracks);
+    EXPECT_DOUBLE_EQ(tracks.at(0).overallEnergy, 0.0);
+    EXPECT_DOUBLE_EQ(tracks.at(1).overallEnergy, 1.0);
+    EXPECT_DOUBLE_EQ(tracks.at(2).overallEnergy, 0.99); // untouched, not ranked
+}
+
+TEST(MusicSyncEnergyNormalizerTest, SingleTrackGetsMidpoint) {
+    QVector<TrackFeatures> tracks;
+    tracks.append(makeEnergyTrack(1, 0.22));
+    normalizeLibraryEnergy(&tracks);
+    EXPECT_DOUBLE_EQ(tracks.first().overallEnergy, 0.5);
+}
+
+TEST(MusicSyncEnergyNormalizerTest, UnlocksHighEnergyGate) {
+    // The real-world complaint: a whole library sits at ~0.15..0.33 raw, so the
+    // absolute "> 0.45" dancey gate (Bass Swap) could never fire.
+    QVector<TrackFeatures> tracks;
+    for (int i = 0; i < 10; ++i) {
+        tracks.append(makeEnergyTrack(i + 1, 0.15 + 0.02 * i));
+    }
+    for (const TrackFeatures& f : tracks) {
+        ASSERT_LT(f.overallEnergy, 0.45); // nothing qualifies beforehand
+    }
+    normalizeLibraryEnergy(&tracks);
+    int dancey = 0;
+    for (const TrackFeatures& f : tracks) {
+        if (f.overallEnergy > 0.45) {
+            ++dancey;
+        }
+    }
+    EXPECT_GT(dancey, 0);
 }
 
 } // namespace

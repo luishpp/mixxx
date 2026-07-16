@@ -173,16 +173,26 @@ QVector<TransitionWindow> AdvancedAnalysisAdapter::computeTransitionWindows(
     QVector<TransitionWindow> candidates;
     for (int p = 0; p < phrases.size(); ++p) {
         const std::int64_t startMs = phrases[p].startMs;
-        const std::int64_t endMs =
-                (p + 1 < phrases.size()) ? phrases[p + 1].startMs : durationMs;
-        if (endMs <= startMs) {
-            continue;
-        }
         if (entry && static_cast<double>(startMs) > entryMaxMs) {
             continue;
         }
         if (!entry && static_cast<double>(startMs) < exitMinMs) {
             continue;
+        }
+
+        // Merge consecutive phrases until the window reaches the preferred
+        // length; a 16-bar phrase grid then yields a 32-bar window.
+        int bars = 0;
+        int lastPhrase = p;
+        for (int q = p; q < phrases.size() && bars < kPreferredWindowBars; ++q) {
+            bars += phrases[q].bars;
+            lastPhrase = q;
+        }
+        const std::int64_t endMs = (lastPhrase + 1 < phrases.size())
+                ? phrases[lastPhrase + 1].startMs
+                : durationMs;
+        if (endMs <= startMs || bars < kMinWindowBars) {
+            continue; // a tail stub is not a usable blend
         }
 
         int i0 = static_cast<int>(static_cast<double>(startMs) / durationMs * n);
@@ -203,22 +213,30 @@ QVector<TransitionWindow> AdvancedAnalysisAdapter::computeTransitionWindows(
         variance /= (i1 - i0);
         const float stability = static_cast<float>(1.0 - std::min(1.0, variance / 0.05));
 
+        // A short window is inherently less useful and also looks artificially
+        // stable (fewer samples), so weight it down instead of letting it win.
+        const double lengthFactor =
+                std::min(1.0, static_cast<double>(bars) / kPreferredWindowBars);
+
         TransitionWindow window;
         window.kind = entry ? QStringLiteral("entry") : QStringLiteral("exit");
         window.startMs = startMs;
         window.endMs = endMs;
-        window.bars = phrases[p].bars;
+        window.bars = bars;
         window.energy = static_cast<float>(mean);
         window.energyStability = stability;
         window.instrumentalScore = 0.5f; // vocal analysis is a later phase
-        window.confidence = stability;
+        window.confidence = static_cast<float>(stability * lengthFactor);
         candidates.append(window);
     }
 
     std::sort(candidates.begin(),
             candidates.end(),
             [](const TransitionWindow& a, const TransitionWindow& b) {
-                return a.energyStability > b.energyStability;
+                if (a.confidence != b.confidence) {
+                    return a.confidence > b.confidence;
+                }
+                return a.startMs < b.startMs; // deterministic tie-break
             });
     for (int i = 0; i < candidates.size() && i < kMaxTransitionWindows; ++i) {
         out.append(candidates[i]);

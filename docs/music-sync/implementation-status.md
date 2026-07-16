@@ -78,6 +78,20 @@ Nota de build: reconfigurar OFF→ON no mesmo diretório exige forçar o AUTOMOC
 - Critério de saída é **auditivo** (ouvir uma transição de 32 compassos sem intervenção): o núcleo compilado está testado; a execução no motor exige rodar a GUI com 2 decks e faixas analisadas.
 - [ ] (Interativo — usuário) *Generate sequence* → escolher um par → **Preview on decks** e ouvir a transição de ~32 compassos (critério de saída da Fase 6). Ajustar `preferredTransitionBars`/tolerância se necessário.
 
+### Fase 6a — correção: energia vazia no snapshot ✅ (2026-07-13)
+Achado em teste real na GUI: **Energy/Sections/Exit @ vinham vazios em toda a biblioteca**, e por isso **todo par caía em `AutoDjFallback`** (sem janelas de transição não há EQ/Bass Swap). Duas causas, ambas corrigidas:
+- Faixa "fria" da biblioteca **não tem o waveform em memória** → `getWaveformSummary()` nulo → curva de energia vazia → sem seções nem janelas. `snapshotLibrary()` passou a **carregar o waveform-summary já armazenado** (`AnalysisDao::getAnalysesForTrackByType(TYPE_WAVESUMMARY)` + `WaveformFactory`), sem re-decodificar e fora da thread de áudio; fica nulo se a faixa nunca teve waveform.
+- `analyzeMissing()` pedia só `WithBeats` → passou a pedir **`WithBeats | WithWaveform`**, senão faixas analisadas pelo módulo nunca ganham waveform.
+- Resultado medido: 215/216 faixas com energia; transições passaram de *Auto DJ em tudo* para **EQ Blend / Cut on phrase**; compatibilidade média 85%→88%, energy fit 39%→62%.
+
+### Fase 6b — calibragem de janelas e energia ✅ (2026-07-13)
+Achados no resultado real (todas as transições saindo com 16 bars, alguns "EQ Blend" de 2–4 bars, e Bass Swap nunca escolhido):
+- [x] **Janelas de 32 compassos**: uma frase tem 16 compassos, a janela cobria exatamente uma frase e o `plan()` fazia `min(32, 16)` → **nunca chegava aos 32 compassos do marco**. `computeTransitionWindows` agora **mescla frases consecutivas** até `kPreferredWindowBars = 32`.
+- [x] **Fim dos rabichos**: a última frase é truncada (`min(barsPerPhrase, restante)`), podendo virar 2–4 compassos; como o ranking era por *estabilidade de energia* e uma janela curta tem poucas amostras (variância baixa), ela ganhava **estabilidade artificialmente alta** e vencia. Agora candidatas abaixo de `kMinWindowBars = 8` são descartadas e o ranking usa **estabilidade ponderada pelo tamanho** (`confidence = stability * min(1, bars/32)`), com desempate determinístico.
+- [x] **Energia relativa à biblioteca** (`planner/energy_normalizer.{h,cpp}`): `overallEnergy` era escalado pelo **máximo teórico** (3×255, três bandas saturadas), que música real nunca atinge — a biblioteca inteira ficava em ~0.15–0.35. Consequências: o gate `overallEnergy > 0.45` do **Bass Swap nunca disparava** e os presets de energia (alvo 0..1) eram inalcançáveis (*energy fit* travado). Agora `normalizeLibraryEnergy()` reescreve `overallEnergy` como **percentil 0..1 relativo à biblioteca** (determinístico, desempate por track id; faixas sem curva ficam de fora e intactas). O sidecar continua guardando o valor bruto — a normalização é derivada, aplicada em `snapshotLibrary`/`loadSnapshots`/`generateSequences` **sobre o mesmo conjunto**, para painel, relatório e preview verem a mesma escala.
+- [x] **Testes**: merge até 32 compassos, descarte de rabicho, janela longa vence a curta estável, normalizador (spread 0..1, ignora faixas sem curva, faixa única, destrava o gate de energia). **ctest do módulo: 33/33 verdes.**
+- Observação (fora do módulo): BPMs errados do beatgrid do Mixxx (ex.: uma faixa detectada a 187.5 BPM) são tratados corretamente pelo planner — avisa *tempo change above tolerance* e escolhe **Cut on phrase** —, mas convém corrigir o beatgrid na faixa.
+
 ## Próximas fases (roadmap)
 - **Fase 1, 2, 3, 4, 5, 6** — ✅ concluídas (acima).
 - **Fase 7** — Executor de mini-set (máquina de estados completa, fila inteligente, preparo da próxima faixa, automações encadeadas, pause/resume/skip/cancel, ManualOverride, eventos): executar 5 faixas continuamente.

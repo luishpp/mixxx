@@ -35,6 +35,12 @@ class AdvancedAnalysisAdapter {
     static constexpr int kBeatsPerBar = 4;
     static constexpr int kBarsPerPhrase = 16;
     static constexpr int kMaxTransitionWindows = 3;
+    /// A window shorter than this is not a usable blend (a 2-bar "EQ blend" is
+    /// really a cut), so such candidates are dropped.
+    static constexpr int kMinWindowBars = 8;
+    /// Windows merge consecutive phrases up to this length, so a 16-bar phrase
+    /// grid can still yield the 32-bar transition the spec targets.
+    static constexpr int kPreferredWindowBars = 32;
 
     /// Buckets per-frame band samples into `numBuckets` and returns per-track
     /// normalized energy (low+mid+high) and bass (low) curves plus an overall
@@ -57,8 +63,13 @@ class AdvancedAnalysisAdapter {
     static QVector<Section> computeSections(
             const QVector<float>& energyCurve, std::int64_t durationMs);
 
-    /// Phrase-aligned candidate mixing windows, ranked by energy stability.
-    /// `entry` restricts to the first 30% of the track; otherwise the last 40%.
+    /// Phrase-aligned candidate mixing windows. Each candidate starts on a
+    /// phrase boundary and merges consecutive phrases up to kPreferredWindowBars;
+    /// candidates shorter than kMinWindowBars are dropped. Ranked by energy
+    /// stability weighted by length, so a short tail phrase (which looks
+    /// artificially stable) cannot outrank a full-length window.
+    /// `entry` restricts the start to the first 30% of the track; otherwise the
+    /// start must be in the last 40%.
     static QVector<TransitionWindow> computeTransitionWindows(
             const QVector<float>& energyCurve,
             const QVector<PhraseMarker>& phrases,

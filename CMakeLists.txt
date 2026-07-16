@@ -3975,6 +3975,8 @@ if(MUSIC_SYNC_ENABLED)
     src/music_sync/planner/harmonic_compatibility.cpp
     src/music_sync/planner/energy_curve.h
     src/music_sync/planner/energy_curve.cpp
+    src/music_sync/planner/energy_normalizer.h
+    src/music_sync/planner/energy_normalizer.cpp
     src/music_sync/planner/pair_scorer.h
     src/music_sync/planner/pair_scorer.cpp
     src/music_sync/planner/explanation_builder.h

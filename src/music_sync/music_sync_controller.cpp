@@ -19,6 +19,7 @@
 #include "music_sync/analysis/advanced_analysis_adapter.h"
 #include "music_sync/analysis/analysis_repository.h"
 #include "music_sync/analysis/native_analysis_adapter.h"
+#include "music_sync/planner/energy_normalizer.h"
 #include "music_sync/planner/preview_compiler.h"
 #include "music_sync/planner/sequence_optimizer.h"
 #include "music_sync/planner/transition_planner.h"
@@ -176,6 +177,8 @@ QVector<TrackFeatures> MusicSyncController::snapshotLibrary(int limit) {
         result.append(features);
     }
     kLogger.info() << "Snapshotted" << result.size() << "library tracks";
+    // The sidecar keeps the raw value; callers see the library-relative scale.
+    normalizeLibraryEnergy(&result);
     return result;
 }
 
@@ -183,7 +186,9 @@ QVector<TrackFeatures> MusicSyncController::loadSnapshots() const {
     if (!m_pDatabase) {
         return {};
     }
-    return AnalysisRepository(m_pDatabase->database()).loadAll();
+    QVector<TrackFeatures> all = AnalysisRepository(m_pDatabase->database()).loadAll();
+    normalizeLibraryEnergy(&all);
+    return all;
 }
 
 int MusicSyncController::snapshotCount() const {
@@ -199,8 +204,12 @@ QVector<Arrangement> MusicSyncController::generateSequences(const MixIntent& int
         return out;
     }
     const AnalysisRepository repository(m_pDatabase->database());
+    // Normalize over the whole set (exactly what loadSnapshots() does) before
+    // filtering, so the energy scale here matches what the panel/preview see.
+    QVector<TrackFeatures> all = repository.loadAll();
+    normalizeLibraryEnergy(&all);
     QVector<TrackFeatures> analyzed;
-    for (const TrackFeatures& features : repository.loadAll()) {
+    for (const TrackFeatures& features : all) {
         if (features.analyzed) {
             analyzed.append(features);
         }
