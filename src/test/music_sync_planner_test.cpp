@@ -226,13 +226,55 @@ TEST(MusicSyncTransitionTest, FallbackWhenNoWindows) {
     EXPECT_LE(p.durationBars, 16);
 }
 
-TEST(MusicSyncTransitionTest, CutWhenIncompatible) {
+TEST(MusicSyncTransitionTest, CutWhenIncompatibleAndNoBreakdownToLandIn) {
     const MixIntent intent;
     const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
     const TrackFeatures b = makeTrackWithWindows(2, 145.0, QStringLiteral("3B"), 0.60);
     const TransitionPlan p = TransitionPlanner::plan(a, b, intent);
+    // No sections at all -> nothing to hide the clash behind, so a cut is honest.
     EXPECT_EQ(p.type, TransitionType::CutOnPhrase);
-    EXPECT_LE(p.durationBars, 8); // a cut is short
+    EXPECT_LE(p.durationBars, 8);
+    EXPECT_FALSE(p.beatSync); // never drag the incoming track to a foreign tempo
+}
+
+TrackFeatures withBreakdownNearExit(TrackFeatures f) {
+    Section breakdown;
+    breakdown.type = QStringLiteral("Breakdown");
+    breakdown.startMs = 200000; // 67% of the 300 s fixture
+    breakdown.endMs = 240000;
+    breakdown.energy = 0.2f;
+    f.sections.append(breakdown);
+    return f;
+}
+
+TEST(MusicSyncTransitionTest, ClashingKeyBecomesABreakdownSwapNotACut) {
+    // The Portal symptom: 3B -> 9B is a clash, but the tempo is fine and the
+    // outgoing track has a breakdown to land in. Spec 16 calls for a "troca por
+    // breakdown"; four hard cuts in the atmospheric opening is what we got
+    // before, and it sounded wrong.
+    const MixIntent intent;
+    const TrackFeatures a =
+            withBreakdownNearExit(makeTrackWithWindows(1, 125.0, QStringLiteral("3B"), 0.30));
+    const TrackFeatures b = makeTrackWithWindows(2, 123.0, QStringLiteral("9B"), 0.30);
+    const TransitionPlan p = TransitionPlanner::plan(a, b, intent);
+
+    EXPECT_EQ(p.type, TransitionType::BreakdownSwap);
+    EXPECT_GT(p.durationBars, 8); // long and gentle, unlike a cut
+    // The tempos agree (1.6%), so this one still beat-matches.
+    EXPECT_TRUE(p.beatSync);
+    EXPECT_FALSE(p.ramps.isEmpty());
+}
+
+TEST(MusicSyncTransitionTest, BreakdownSwapForATempoGapDoesNotSync) {
+    // Same landing zone, but chosen because the tempo moves: locking would drag
+    // the incoming track to a foreign tempo.
+    const MixIntent intent;
+    const TrackFeatures a =
+            withBreakdownNearExit(makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60));
+    const TrackFeatures b = makeTrackWithWindows(2, 145.0, QStringLiteral("8A"), 0.60);
+    const TransitionPlan p = TransitionPlanner::plan(a, b, intent);
+    EXPECT_EQ(p.type, TransitionType::BreakdownSwap);
+    EXPECT_FALSE(p.beatSync);
 }
 
 TrackFeatures makeActTrack(std::int64_t id, int act, double bpm, const QString& camelot) {

@@ -18,6 +18,8 @@ QString transitionTypeName(TransitionType type) {
         return QStringLiteral("Bass Swap");
     case TransitionType::FilterTransition:
         return QStringLiteral("Filter");
+    case TransitionType::BreakdownSwap:
+        return QStringLiteral("Breakdown swap");
     case TransitionType::CutOnPhrase:
         return QStringLiteral("Cut on phrase");
     case TransitionType::AutoDjFallback:
@@ -26,7 +28,29 @@ QString transitionTypeName(TransitionType type) {
     return QStringLiteral("Crossfade");
 }
 
-const QString TransitionPlanner::kPlannerVersion = QStringLiteral("transition-0.1.0");
+const QString TransitionPlanner::kPlannerVersion = QStringLiteral("transition-0.2.0");
+
+namespace {
+/// A low-energy stretch (Breakdown or Outro) in the last 40% of the track: the
+/// landing zone a breakdown swap needs. Without one there is nothing to hide the
+/// clash behind, and a cut is the honest choice.
+bool hasBreakdownNearExit(const TrackFeatures& from) {
+    if (from.durationMs <= 0) {
+        return false;
+    }
+    const double exitRegionMs = 0.60 * static_cast<double>(from.durationMs);
+    for (const Section& section : from.sections) {
+        if (static_cast<double>(section.endMs) < exitRegionMs) {
+            continue;
+        }
+        if (section.type == QStringLiteral("Breakdown") ||
+                section.type == QStringLiteral("Outro")) {
+            return true;
+        }
+    }
+    return false;
+}
+} // anonymous namespace
 
 TransitionType TransitionPlanner::chooseType(
         const TrackFeatures& from, const TrackFeatures& to, double maxTempoChangePercent) {
@@ -39,7 +63,12 @@ TransitionType TransitionPlanner::chooseType(
     const double tempoPct =
             (from.bpm > 0.0) ? std::abs(to.bpm - from.bpm) / from.bpm * 100.0 : 100.0;
     if (tempoPct > maxTempoChangePercent * 1.6 || keyCompat < 0.4) {
-        return TransitionType::CutOnPhrase;
+        // Spec 16: a clashing key, a tempo move or a genre turn calls for a
+        // "troca por breakdown", not a cut — bring the new track across a
+        // low-energy stretch, where there is little tonal content to clash. Only
+        // fall back to cutting when the outgoing track offers no such landing.
+        return hasBreakdownNearExit(from) ? TransitionType::BreakdownSwap
+                                          : TransitionType::CutOnPhrase;
     }
     const double windowConf = 0.5 *
             (static_cast<double>(from.exitWindows.first().confidence) +
@@ -73,6 +102,20 @@ void buildAutomation(TransitionPlan& plan) {
         plan.actions.append({QStringLiteral("sourceLowEq"), swapAt, 0.0}); // pull source bass
         plan.actions.append({QStringLiteral("targetLowEq"), swapAt, 1.0}); // bring target bass
         plan.ramps.append({QStringLiteral("sourceVolume"), d * 0.75, d, 1.0, 0.0});
+        break;
+    }
+    case TransitionType::BreakdownSwap: {
+        // Long and gentle: the outgoing track is thinning out anyway, so pull
+        // its bass early and sweep it away with the filter while the incoming
+        // one grows underneath. Nothing here happens abruptly — that is the
+        // whole point of choosing this over a cut.
+        plan.actions.append({QStringLiteral("targetLowEq"), 0.0, 0.0});
+        plan.actions.append({QStringLiteral("sourceLowEq"), d * 0.25, 0.0});
+        plan.ramps.append({QStringLiteral("targetVolume"), 0.0, d * 0.6, 0.0, 1.0});
+        plan.ramps.append({QStringLiteral("sourceFilter"), d * 0.25, d, 0.5, 1.0});
+        plan.ramps.append({QStringLiteral("targetLowEq"), d * 0.5, d * 0.8, 0.0, 1.0});
+        plan.ramps.append({QStringLiteral("crossfader"), 0.0, d, -1.0, 1.0});
+        plan.ramps.append({QStringLiteral("sourceVolume"), d * 0.7, d, 1.0, 0.0});
         break;
     }
     case TransitionType::FilterTransition: {
@@ -138,6 +181,15 @@ TransitionPlan TransitionPlanner::plan(
 
     const double beatMs = plan.targetBpm > 0.0 ? 60000.0 / plan.targetBpm : 500.0;
     plan.durationMs = static_cast<std::int64_t>(plan.durationBeats * beatMs);
+
+    // Tempo-lock only when the decks actually overlap AND the tempos are close
+    // enough to lock without stretching. A breakdown swap picked for a key clash
+    // still wants sync (the tempos agree); one picked for a tempo gap must not.
+    const double tempoPct =
+            (from.bpm > 0.0) ? std::abs(to.bpm - from.bpm) / from.bpm * 100.0 : 100.0;
+    plan.beatSync = plan.type != TransitionType::CutOnPhrase &&
+            plan.type != TransitionType::AutoDjFallback &&
+            tempoPct <= maxTempoPct * 1.6;
 
     buildAutomation(plan);
 

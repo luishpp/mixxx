@@ -15,6 +15,7 @@ PreviewProgram PreviewCompiler::compile(const TransitionPlan& plan, double stepB
     program.targetBpm = plan.targetBpm;
     program.sourceRateRatio = plan.sourceRateRatio;
     program.targetRateRatio = plan.targetRateRatio;
+    program.beatSync = plan.beatSync;
     program.durationBeats = plan.durationBeats;
     program.durationMs = plan.durationMs;
     program.explanation = plan.explanation;

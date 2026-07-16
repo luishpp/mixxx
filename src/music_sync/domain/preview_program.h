@@ -41,6 +41,7 @@ struct PreviewProgram {
     double targetBpm = 0.0;
     double sourceRateRatio = 1.0;
     double targetRateRatio = 1.0;
+    bool beatSync = true;
 
     // Transition length.
     double durationBeats = 0.0;
@@ -60,8 +61,7 @@ struct PreviewProgram {
     /// so they must share a tempo; a cut or the Auto DJ fallback hands over
     /// instead, and each track keeps its own.
     bool needsBeatSync() const {
-        return type != TransitionType::CutOnPhrase &&
-                type != TransitionType::AutoDjFallback;
+        return beatSync;
     }
 };
 

@@ -12,6 +12,11 @@ enum class TransitionType {
     EqBlend,
     BassSwap,
     FilterTransition,
+    /// Spec 16 "troca por breakdown": the answer when the key clashes, the tempo
+    /// moves or the genre turns. The incoming track arrives across a low-energy
+    /// section, where there is little tonal content to clash — so the swap can
+    /// stay long and smooth instead of becoming a cut.
+    BreakdownSwap,
     CutOnPhrase,
     AutoDjFallback,
 };
@@ -55,6 +60,10 @@ struct TransitionPlan {
     double targetBpm = 0.0;
     double sourceRateRatio = 1.0;
     double targetRateRatio = 1.0;
+    /// Whether the decks should be tempo-locked. Decided here, not derived from
+    /// the type: only the planner knows whether the tempos actually agree. A
+    /// breakdown swap over a 1.6% tempo gap wants sync; a cut never does.
+    bool beatSync = true;
 
     // Automation, beat-relative to the start of the transition.
     QVector<ControlAction> actions;

@@ -114,20 +114,19 @@ TEST(MusicSyncPreviewTest, ElapsedBeatsGuardsBadInput) {
     EXPECT_DOUBLE_EQ(PreviewExecutor::elapsedBeats(0.6, 0.5, 179000.0, 0.0), 0.0);
 }
 
-TEST(MusicSyncPreviewTest, BeatSyncOnlyForBlendingTransitions) {
-    // A cut is chosen BECAUSE the tempos clash, so the executor must not drag
-    // the incoming track to the outgoing one's tempo.
-    const auto programFor = [](TransitionType type) {
-        TransitionPlan plan;
-        plan.type = type;
-        return PreviewCompiler::compile(plan);
-    };
-    EXPECT_TRUE(programFor(TransitionType::Crossfade).needsBeatSync());
-    EXPECT_TRUE(programFor(TransitionType::EqBlend).needsBeatSync());
-    EXPECT_TRUE(programFor(TransitionType::BassSwap).needsBeatSync());
-    EXPECT_TRUE(programFor(TransitionType::FilterTransition).needsBeatSync());
-    EXPECT_FALSE(programFor(TransitionType::CutOnPhrase).needsBeatSync());
-    EXPECT_FALSE(programFor(TransitionType::AutoDjFallback).needsBeatSync());
+TEST(MusicSyncPreviewTest, CarriesThePlannersBeatSyncDecision) {
+    // Sync is the planner's call: it is the only one that knows whether the
+    // tempos agree. The compiler must carry that decision through untouched
+    // rather than re-deriving it from the type — a breakdown swap picked for a
+    // key clash syncs, the same type picked for a tempo gap must not.
+    TransitionPlan plan;
+    plan.type = TransitionType::BreakdownSwap;
+
+    plan.beatSync = false;
+    EXPECT_FALSE(PreviewCompiler::compile(plan).needsBeatSync());
+
+    plan.beatSync = true;
+    EXPECT_TRUE(PreviewCompiler::compile(plan).needsBeatSync());
 }
 
 TEST(MusicSyncPreviewTest, CopiesTransitionType) {
