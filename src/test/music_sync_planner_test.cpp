@@ -347,6 +347,31 @@ TEST(MusicSyncOptimizerTest, AnchorHoldsItsPlaceInsideTheAct) {
     EXPECT_FALSE(items.at(0).locked); // non-anchors stay free
 }
 
+TEST(MusicSyncOptimizerTest, EachActIsJudgedOnItsOwnSliceOfTheCurve) {
+    // With an ascending curve, a late act must prefer its HIGH-energy track
+    // first-to-last order. If every act were judged against the whole 0..1 curve
+    // (the bug), the late act would be told to start low and build, like the
+    // opener.
+    const auto make = [](std::int64_t id, int act, double energy) {
+        TrackFeatures f = makeTrack(id, 124.0, QStringLiteral("8A"), energy);
+        f.act = act;
+        f.energyCurve = QVector<float>(4, 0.5f);
+        return f;
+    };
+    QVector<TrackFeatures> tracks;
+    tracks.append(make(1, 1, 0.0)); // act 1: the quiet opener
+    tracks.append(make(2, 1, 0.1));
+    tracks.append(make(3, 7, 0.9)); // act 7: both loud, near the curve's top
+    tracks.append(make(4, 7, 1.0));
+
+    SequenceOptimizer::Options options;
+    options.intent.energyPreset = EnergyPreset::Ascending;
+    const QVector<Arrangement> out = SequenceOptimizer::arrange(tracks, options);
+    ASSERT_FALSE(out.isEmpty());
+    // Act 7 sits at the end of the curve, so its louder track closes the set.
+    EXPECT_EQ(out.first().items.last().mixxxTrackId, 4);
+}
+
 TEST(MusicSyncOptimizerTest, NoAnchorLocksWithoutTrackNumbers) {
     // An unprepped act (no plan numbers) must not get guessed positions.
     QVector<TrackFeatures> tracks;

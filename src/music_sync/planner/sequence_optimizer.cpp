@@ -163,9 +163,18 @@ QVector<Arrangement> SequenceOptimizer::arrange(
         if (actOrder.size() > 1) {
             QVector<QVector<Arrangement>> perAct;
             QSet<std::int64_t> lockedIds;
+            int placed = 0; // how many tracks the earlier acts already occupy
             for (int act : actOrder) {
+                const QVector<TrackFeatures>& group = byAct.value(act);
                 Options sub = options;
                 sub.respectActs = false;
+                // Each act only spans its own slice of the journey: act 5 is
+                // judged against the curve around 70-85%, not against 0..1.
+                if (n > 1) {
+                    sub.curveFrom = static_cast<double>(placed) / (n - 1);
+                    sub.curveTo = static_cast<double>(placed + group.size() - 1) / (n - 1);
+                }
+                placed += group.size();
                 // Harmony matters more in some acts than others (spec 10.5).
                 sub.weights = weightsForAct(act, options.weights);
                 // Hybrid curation (spec 9): the act's anchors hold their
@@ -173,11 +182,11 @@ QVector<Arrangement> SequenceOptimizer::arrange(
                 // by track number inside the act — and the engine arranges the
                 // rest around them. Without this, nothing stops the optimizer
                 // from burying the anchor that defines the act mid-way.
-                sub.locks = anchorLocks(byAct.value(act));
+                sub.locks = anchorLocks(group);
                 for (const LockedPosition& lock : sub.locks) {
                     lockedIds.insert(lock.mixxxTrackId);
                 }
-                perAct.append(arrange(byAct.value(act), sub));
+                perAct.append(arrange(group, sub));
             }
 
             const QVector<EnergyPoint> actCurve = EnergyCurve::forIntent(options.intent);
@@ -230,8 +239,14 @@ QVector<Arrangement> SequenceOptimizer::arrange(
         }
     }
 
-    const double openerTarget =
-            curve.isEmpty() ? 0.5 : EnergyCurve::energyAt(curve, 0.0);
+    // Where this group sits on the global curve — the act path narrows it.
+    const auto curveAtLocal = [&](int pos, int size) {
+        const double local = size > 1 ? static_cast<double>(pos) / (size - 1) : 0.0;
+        return options.curveFrom + local * (options.curveTo - options.curveFrom);
+    };
+    const double openerTarget = curve.isEmpty()
+            ? 0.5
+            : EnergyCurve::energyAt(curve, options.curveFrom);
     const auto openerScore = [&](int idx) {
         return 1.0 - std::abs(tracks[idx].overallEnergy - openerTarget);
     };
@@ -328,7 +343,7 @@ QVector<Arrangement> SequenceOptimizer::arrange(
             if (route[pos] < 0) {
                 continue;
             }
-            const double p = static_cast<double>(pos) / (route.size() - 1);
+            const double p = curveAtLocal(pos, route.size());
             err += std::abs(tracks[route[pos]].overallEnergy - EnergyCurve::energyAt(curve, p));
             ++count;
         }

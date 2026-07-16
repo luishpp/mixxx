@@ -39,6 +39,13 @@ class SequenceOptimizer {
         /// Note: `locks` are not applied on the act path (acts already pin the
         /// coarse order); locking individual anchors is a later refinement.
         bool respectActs = true;
+        /// The slice of the energy curve these tracks occupy, normalized over
+        /// the whole set. The act path gives each act its own slice, so an act
+        /// is judged against the curve where it actually sits in the journey —
+        /// without this every act is told to "start low and build" as if it
+        /// were the whole set. Defaults to the full curve.
+        double curveFrom = 0.0;
+        double curveTo = 1.0;
     };
 
     /// Returns ranked candidate arrangements (best first). May return fewer than
