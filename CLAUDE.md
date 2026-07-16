@@ -36,3 +36,7 @@ Automações são pré-calculadas e consumidas como snapshots imutáveis.
 
 ## Build no Windows
 Ver `docs/music-sync/building-windows.md` (toolchain, deps pré-compiladas, comandos validados).
+
+## Documentação do usuário
+`docs/music-sync/user-guide.md` descreve o painel (o que cada controle faz/lê/grava, a ordem de
+uso, colunas da tabela, preview em dois decks, troubleshooting). Mantê-lo em dia ao mudar a UI.

@@ -14,6 +14,7 @@ Progresso real do Music Sync DJ (fork do Mixxx 2.5.6). Atualizar a cada etapa re
 - [ ] (Interativo — a cargo do usuário) Abrir a GUI e reproduzir uma faixa para conferência auditiva.
 
 Comandos de build validados em `building-windows.md`. Baseline documentada em `upstream-baseline.md`.
+Como usar o painel (ordem dos comandos, colunas, preview, troubleshooting): `user-guide.md`.
 
 ## Fase 1 — Esqueleto do módulo ✅ (2026-07-12)
 - [x] Módulo `src/music_sync/` (namespace `mixxx::music_sync`), compilado em `mixxx-lib` só com `MUSIC_SYNC_ENABLED=ON`:
