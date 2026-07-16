@@ -72,6 +72,32 @@ QString previewStateText(int state) {
         return QObject::tr("Idle");
     }
 }
+
+// Mirrors mixxx::music_sync::SetExecutor::State.
+QString setStateText(int state) {
+    switch (state) {
+    case 1:
+        return QObject::tr("Preparing");
+    case 2:
+        return QObject::tr("Playing");
+    case 3:
+        return QObject::tr("Transitioning");
+    case 4:
+        return QObject::tr("Preparing next");
+    case 5:
+        return QObject::tr("Paused");
+    case 6:
+        return QObject::tr("Manual override");
+    case 7:
+        return QObject::tr("Completed");
+    case 8:
+        return QObject::tr("Cancelled");
+    case 9:
+        return QObject::tr("Failed");
+    default:
+        return QObject::tr("Idle");
+    }
+}
 } // anonymous namespace
 
 namespace mixxx::music_sync {
@@ -422,11 +448,59 @@ void DlgMusicSync::slotGenerateSequence() {
                         previewStateText(state) + QStringLiteral(" — ") + message);
             });
 
+    // --- Fase 7: run the whole set ---
+    auto* setRow = new QHBoxLayout();
+    auto* runSetButton = new QPushButton(tr("Run set"), &dialog);
+    runSetButton->setToolTip(
+            tr("Plays the whole sequence on the decks, handing over automatically."));
+    auto* pauseButton = new QPushButton(tr("Pause"), &dialog);
+    auto* resumeButton = new QPushButton(tr("Resume"), &dialog);
+    auto* skipButton = new QPushButton(tr("Skip"), &dialog);
+    auto* stopSetButton = new QPushButton(tr("Stop set"), &dialog);
+    setRow->addWidget(runSetButton);
+    setRow->addWidget(pauseButton);
+    setRow->addWidget(resumeButton);
+    setRow->addWidget(skipButton);
+    setRow->addWidget(stopSetButton);
+    setRow->addStretch(1);
+    layout->addLayout(setRow);
+    auto* setStatus = new QLabel(
+            tr("Runs the sequence end to end. Moving the crossfader hands the decks back."),
+            &dialog);
+    setStatus->setWordWrap(true);
+    layout->addWidget(setStatus);
+
+    connect(runSetButton, &QPushButton::clicked, &dialog, [this, &best, intent, setStatus]() {
+        if (!m_pController->runSet(best, intent)) {
+            setStatus->setText(tr("Cannot run the set — need two decks and every "
+                                  "track available in the library."));
+        }
+    });
+    connect(pauseButton, &QPushButton::clicked, &dialog, [this]() {
+        m_pController->pauseSet();
+    });
+    connect(resumeButton, &QPushButton::clicked, &dialog, [this]() {
+        m_pController->resumeSet();
+    });
+    connect(skipButton, &QPushButton::clicked, &dialog, [this]() {
+        m_pController->skipSetTrack();
+    });
+    connect(stopSetButton, &QPushButton::clicked, &dialog, [this]() {
+        m_pController->cancelSet();
+    });
+    connect(m_pController,
+            &MusicSyncController::setStateChanged,
+            &dialog,
+            [setStatus](int state, const QString& message) {
+                setStatus->setText(setStateText(state) + QStringLiteral(" — ") + message);
+            });
+
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::accept);
     layout->addWidget(buttons);
     dialog.exec();
     // Stop any running automation if the user closes the dialog mid-preview.
+    // The set keeps running: it is meant to outlive the dialog.
     m_pController->cancelPreview();
 
     m_pSummaryLabel->setText(

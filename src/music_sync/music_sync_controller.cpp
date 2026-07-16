@@ -22,8 +22,10 @@
 #include "music_sync/planner/energy_normalizer.h"
 #include "music_sync/planner/preview_compiler.h"
 #include "music_sync/planner/sequence_optimizer.h"
+#include "music_sync/planner/set_compiler.h"
 #include "music_sync/planner/transition_planner.h"
 #include "music_sync/preview/preview_executor.h"
+#include "music_sync/preview/set_executor.h"
 #include "music_sync/sidecar_database.h"
 #include "preferences/usersettings.h"
 #include "track/track.h"
@@ -375,6 +377,83 @@ void MusicSyncController::repeatPreview() {
 void MusicSyncController::cancelPreview() {
     if (m_pPreviewExecutor) {
         m_pPreviewExecutor->cancel();
+    }
+}
+
+bool MusicSyncController::runSet(const Arrangement& arrangement, const MixIntent& intent) {
+    if (!m_pCoreServices || arrangement.items.isEmpty()) {
+        return false;
+    }
+    const std::shared_ptr<PlayerManager> pPlayerManager =
+            m_pCoreServices->getPlayerManager();
+    const std::shared_ptr<TrackCollectionManager> pTrackCollectionManager =
+            m_pCoreServices->getTrackCollectionManager();
+    if (!pPlayerManager || !pTrackCollectionManager ||
+            pPlayerManager->numberOfDecks() < SetCompiler::kDeckCount) {
+        kLogger.warning() << "Need at least" << SetCompiler::kDeckCount << "decks to run a set";
+        return false;
+    }
+
+    QHash<std::int64_t, TrackFeatures> byId;
+    for (const TrackFeatures& features : loadSnapshots()) {
+        byId.insert(features.mixxxTrackId, features);
+    }
+    const SetProgram program = SetCompiler::compile(arrangement, byId, intent);
+    if (program.items.isEmpty()) {
+        return false;
+    }
+
+    // Resolve every track up front: starting a set only to fail three tracks in
+    // would leave the decks mid-air.
+    QVector<TrackPointer> tracks;
+    for (const SetItem& item : program.items) {
+        const TrackPointer pTrack = pTrackCollectionManager->getTrackById(
+                TrackId(QVariant(static_cast<qlonglong>(item.mixxxTrackId))));
+        if (!pTrack) {
+            kLogger.warning() << "Cannot resolve track" << item.mixxxTrackId
+                              << "; refusing to start the set";
+            return false;
+        }
+        tracks.append(pTrack);
+    }
+
+    if (!m_pSetExecutor) {
+        m_pSetExecutor = std::make_unique<SetExecutor>(pPlayerManager, this);
+        connect(m_pSetExecutor.get(),
+                &SetExecutor::stateChanged,
+                this,
+                &MusicSyncController::setStateChanged);
+        connect(m_pSetExecutor.get(),
+                &SetExecutor::positionChanged,
+                this,
+                &MusicSyncController::setPositionChanged);
+    }
+    kLogger.info() << "Running set:" << program.explanation;
+    m_pSetExecutor->start(program, tracks);
+    return true;
+}
+
+void MusicSyncController::pauseSet() {
+    if (m_pSetExecutor) {
+        m_pSetExecutor->pause();
+    }
+}
+
+void MusicSyncController::resumeSet() {
+    if (m_pSetExecutor) {
+        m_pSetExecutor->resume();
+    }
+}
+
+void MusicSyncController::skipSetTrack() {
+    if (m_pSetExecutor) {
+        m_pSetExecutor->skip();
+    }
+}
+
+void MusicSyncController::cancelSet() {
+    if (m_pSetExecutor) {
+        m_pSetExecutor->cancel();
     }
 }
 

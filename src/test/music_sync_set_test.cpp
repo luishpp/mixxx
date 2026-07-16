@@ -6,6 +6,7 @@
 #include "music_sync/domain/arrangement.h"
 #include "music_sync/domain/set_program.h"
 #include "music_sync/planner/set_compiler.h"
+#include "music_sync/preview/set_executor.h"
 
 namespace mixxx::music_sync {
 namespace {
@@ -145,6 +146,24 @@ TEST(MusicSyncSetTest, EstimatedDurationAddsUpThePlaySpans) {
     EXPECT_EQ(set.estimatedDurationMs(), expected);
     EXPECT_GT(set.estimatedDurationMs(), 0);
     EXPECT_FALSE(set.explanation.isEmpty());
+}
+
+TEST(MusicSyncSetTest, ReachedExitDecidesTheHandover) {
+    // The decision the whole set hinges on: 5:00 track handing over at 3:30.
+    constexpr std::int64_t kDuration = 300000;
+    constexpr std::int64_t kExit = 210000; // 70%
+
+    EXPECT_FALSE(SetExecutor::reachedExit(0.0, kExit, kDuration));
+    EXPECT_FALSE(SetExecutor::reachedExit(0.69, kExit, kDuration));
+    EXPECT_TRUE(SetExecutor::reachedExit(0.70, kExit, kDuration));
+    EXPECT_TRUE(SetExecutor::reachedExit(0.95, kExit, kDuration));
+}
+
+TEST(MusicSyncSetTest, ReachedExitNeverFiresOnMissingData) {
+    // Without a duration or an exit there is no handover point, and guessing one
+    // would cut a track off mid-play.
+    EXPECT_FALSE(SetExecutor::reachedExit(0.9, 210000, 0));
+    EXPECT_FALSE(SetExecutor::reachedExit(0.9, 0, 300000));
 }
 
 } // namespace

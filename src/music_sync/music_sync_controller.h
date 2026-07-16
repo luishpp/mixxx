@@ -18,6 +18,7 @@ namespace mixxx::music_sync {
 
 class SidecarDatabase;
 class PreviewExecutor;
+class SetExecutor;
 
 /// Entry point / lifecycle owner of the Music Sync module. It opens the sidecar
 /// database, runs migrations, reads native track analysis from the Mixxx
@@ -91,10 +92,23 @@ class MusicSyncController : public QObject {
     /// Stops the preview automation and hands the decks back to the user.
     void cancelPreview();
 
+    // --- Fase 7: mini-set executor ---
+
+    /// Compiles `arrangement` into a set program and runs it on the decks.
+    /// Returns false when the tracks or deck controls are unavailable.
+    bool runSet(const Arrangement& arrangement, const MixIntent& intent);
+
+    void pauseSet();
+    void resumeSet();
+    void skipSetTrack();
+    void cancelSet();
+
   signals:
     void analysisProgress(int currentTrackNumber, int totalTracks);
     void analysisFinished();
     void previewStateChanged(int state, const QString& message);
+    void setStateChanged(int state, const QString& message);
+    void setPositionChanged(int position, const QString& what);
 
   private:
     std::shared_ptr<mixxx::CoreServices> m_pCoreServices;
@@ -102,6 +116,7 @@ class MusicSyncController : public QObject {
     bool m_ready;
     TrackAnalysisScheduler::Pointer m_pScheduler;
     std::unique_ptr<PreviewExecutor> m_pPreviewExecutor;
+    std::unique_ptr<SetExecutor> m_pSetExecutor;
 };
 
 } // namespace mixxx::music_sync

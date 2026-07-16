@@ -3994,6 +3994,10 @@ if(MUSIC_SYNC_ENABLED)
     src/music_sync/planner/set_compiler.cpp
     src/music_sync/preview/preview_executor.h
     src/music_sync/preview/preview_executor.cpp
+    src/music_sync/preview/deck_adapter.h
+    src/music_sync/preview/deck_adapter.cpp
+    src/music_sync/preview/set_executor.h
+    src/music_sync/preview/set_executor.cpp
     src/music_sync/music_sync_controller.h
     src/music_sync/music_sync_controller.cpp
     src/music_sync/dlg_music_sync.h
