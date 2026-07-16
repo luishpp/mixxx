@@ -69,6 +69,51 @@ QVector<LockedPosition> anchorLocks(const QVector<TrackFeatures>& group) {
     return locks;
 }
 
+/// The engine must beat the plan's own order by this much (in average pair
+/// score) before it is allowed to override it. Anything smaller is noise, and
+/// the plan carries human intent the engine cannot measure.
+constexpr double kPlanOverrideMargin = 0.02;
+
+/// The act's tracks in the order the plan gave them (by track number). Empty if
+/// any track lacks a number — then there is no plan order to honour.
+QVector<TrackFeatures> inPlanOrder(const QVector<TrackFeatures>& group) {
+    for (const TrackFeatures& track : group) {
+        if (track.planOrder() < 0.0) {
+            return {};
+        }
+    }
+    QVector<TrackFeatures> ordered = group;
+    std::stable_sort(ordered.begin(),
+            ordered.end(),
+            [](const TrackFeatures& a, const TrackFeatures& b) {
+                return a.planOrder() < b.planOrder();
+            });
+    return ordered;
+}
+
+double averagePairScore(const QVector<TrackFeatures>& ordered,
+        const ScoringWeights& weights,
+        double maxTempoPct) {
+    if (ordered.size() < 2) {
+        return 1.0;
+    }
+    double sum = 0.0;
+    for (int i = 0; i + 1 < ordered.size(); ++i) {
+        sum += PairScorer::score(ordered.at(i), ordered.at(i + 1), weights, maxTempoPct)
+                       .total;
+    }
+    return sum / (ordered.size() - 1);
+}
+
+QVector<std::int64_t> idsOf(const QVector<TrackFeatures>& ordered) {
+    QVector<std::int64_t> ids;
+    ids.reserve(ordered.size());
+    for (const TrackFeatures& track : ordered) {
+        ids.append(track.mixxxTrackId);
+    }
+    return ids;
+}
+
 /// Rebuilds an Arrangement from a final track order, recomputing every pair from
 /// scratch. Used by the act path: concatenating per-act routes creates new pairs
 /// at the act boundaries that no sub-arrangement ever scored.
@@ -161,7 +206,12 @@ QVector<Arrangement> SequenceOptimizer::arrange(
         }
         // One group = nothing to constrain; fall through (also ends the recursion).
         if (actOrder.size() > 1) {
-            QVector<QVector<Arrangement>> perAct;
+            QHash<std::int64_t, TrackFeatures> byId;
+            for (const TrackFeatures& track : tracks) {
+                byId.insert(track.mixxxTrackId, track);
+            }
+            // Candidate orders per act, best first.
+            QVector<QVector<QVector<TrackFeatures>>> perAct;
             QSet<std::int64_t> lockedIds;
             int placed = 0; // how many tracks the earlier acts already occupy
             for (int act : actOrder) {
@@ -186,29 +236,58 @@ QVector<Arrangement> SequenceOptimizer::arrange(
                 for (const LockedPosition& lock : sub.locks) {
                     lockedIds.insert(lock.mixxxTrackId);
                 }
-                perAct.append(arrange(group, sub));
+
+                QVector<QVector<TrackFeatures>> orders;
+                for (const Arrangement& alternative : arrange(group, sub)) {
+                    QVector<TrackFeatures> order;
+                    for (const ArrangementItem& item : alternative.items) {
+                        order.append(byId.value(item.mixxxTrackId));
+                    }
+                    orders.append(order);
+                }
+
+                // The plan's own order is the baseline. Spec 8 gives every track
+                // a role ("introdução cinematográfica", "ponte introdutória")
+                // that the engine cannot see — it only knows harmony, tempo,
+                // energy and phrase. So the human order leads unless the engine
+                // clearly beats it; otherwise it stays on offer as an alternative.
+                const QVector<TrackFeatures> baseline = inPlanOrder(group);
+                if (!baseline.isEmpty()) {
+                    const double baseScore =
+                            averagePairScore(baseline, sub.weights, maxTempoPct);
+                    const double engineScore = orders.isEmpty()
+                            ? -1.0
+                            : averagePairScore(orders.first(), sub.weights, maxTempoPct);
+                    // Drop an engine order identical to the plan's, so the same
+                    // route is not offered twice.
+                    const QVector<std::int64_t> baseIds = idsOf(baseline);
+                    for (int i = orders.size() - 1; i >= 0; --i) {
+                        if (idsOf(orders.at(i)) == baseIds) {
+                            orders.removeAt(i);
+                        }
+                    }
+                    if (engineScore > baseScore + kPlanOverrideMargin) {
+                        orders.append(baseline); // engine earned the lead
+                    } else {
+                        orders.prepend(baseline);
+                    }
+                }
+                perAct.append(orders);
             }
 
             const QVector<EnergyPoint> actCurve = EnergyCurve::forIntent(options.intent);
-            QHash<std::int64_t, TrackFeatures> byId;
-            for (const TrackFeatures& track : tracks) {
-                byId.insert(track.mixxxTrackId, track);
-            }
             for (int k = 0; k < options.numAlternatives; ++k) {
                 QVector<TrackFeatures> ordered;
                 bool fresh = false; // did any act actually offer a k-th variant?
-                for (const QVector<Arrangement>& alternatives : perAct) {
-                    if (alternatives.isEmpty()) {
+                for (const QVector<QVector<TrackFeatures>>& orders : perAct) {
+                    if (orders.isEmpty()) {
                         continue;
                     }
-                    const int pick =
-                            std::min(k, static_cast<int>(alternatives.size()) - 1);
+                    const int pick = std::min(k, static_cast<int>(orders.size()) - 1);
                     if (pick == k) {
                         fresh = true;
                     }
-                    for (const ArrangementItem& item : alternatives.at(pick).items) {
-                        ordered.append(byId.value(item.mixxxTrackId));
-                    }
+                    ordered.append(orders.at(pick));
                 }
                 if (ordered.isEmpty() || (k > 0 && !fresh)) {
                     break; // no act has anything new left: stop inventing duplicates

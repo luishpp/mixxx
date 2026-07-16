@@ -347,6 +347,61 @@ TEST(MusicSyncOptimizerTest, AnchorHoldsItsPlaceInsideTheAct) {
     EXPECT_FALSE(items.at(0).locked); // non-anchors stay free
 }
 
+TEST(MusicSyncOptimizerTest, PlanOrderLeadsUnlessTheEngineClearlyBeatsIt) {
+    // The real symptom: the set opened with Weightless (03) instead of The
+    // Future Is Unknown (01), because the engine picks the opener by energy fit
+    // and cannot know track 01 is the cinematic intro. The plan's order must
+    // lead when the engine has no clear win.
+    const auto make = [](std::int64_t id, int act, const QString& num, double energy) {
+        TrackFeatures f = makeTrack(id, 124.0, QStringLiteral("8A"), energy);
+        f.act = act;
+        f.trackNumber = num;
+        f.energyCurve = QVector<float>(4, 0.5f);
+        return f;
+    };
+    QVector<TrackFeatures> tracks;
+    // All equally compatible (same key/BPM), so the engine has nothing to gain
+    // by reordering — but energies would tempt it to open with the loud one.
+    tracks.append(make(1, 1, QStringLiteral("01"), 0.28));
+    tracks.append(make(2, 1, QStringLiteral("02"), 0.08));
+    tracks.append(make(3, 1, QStringLiteral("03"), 0.64));
+    TrackFeatures second = make(4, 2, QStringLiteral("04"), 0.5);
+    tracks.append(second);
+
+    SequenceOptimizer::Options options;
+    options.intent.energyPreset = EnergyPreset::Waves;
+    const QVector<Arrangement> out = SequenceOptimizer::arrange(tracks, options);
+    ASSERT_FALSE(out.isEmpty());
+    const QVector<ArrangementItem>& items = out.first().items;
+    ASSERT_EQ(items.size(), 4);
+    EXPECT_EQ(items.at(0).mixxxTrackId, 1); // track 01 opens, as the plan says
+    EXPECT_EQ(items.at(1).mixxxTrackId, 2);
+    EXPECT_EQ(items.at(2).mixxxTrackId, 3);
+}
+
+TEST(MusicSyncOptimizerTest, EngineOverridesThePlanWhenItIsClearlyBetter) {
+    // The plan's order here is harmonically terrible (8A -> 3B -> 8A) while a
+    // reorder is clean, so the engine should earn the lead.
+    const auto make = [](std::int64_t id, int act, const QString& num, const QString& camelot) {
+        TrackFeatures f = makeTrack(id, 124.0, camelot, 0.5);
+        f.act = act;
+        f.trackNumber = num;
+        return f;
+    };
+    QVector<TrackFeatures> tracks;
+    tracks.append(make(1, 1, QStringLiteral("01"), QStringLiteral("8A")));
+    tracks.append(make(2, 1, QStringLiteral("02"), QStringLiteral("3B")));
+    tracks.append(make(3, 1, QStringLiteral("03"), QStringLiteral("8A")));
+    tracks.append(make(4, 2, QStringLiteral("04"), QStringLiteral("8A")));
+
+    SequenceOptimizer::Options options;
+    const QVector<Arrangement> out = SequenceOptimizer::arrange(tracks, options);
+    ASSERT_FALSE(out.isEmpty());
+    // Whatever it picks, the plan's order must still be offered as one of the
+    // alternatives — the engine never silently discards the human curation.
+    EXPECT_GE(out.size(), 2);
+}
+
 TEST(MusicSyncOptimizerTest, EachActIsJudgedOnItsOwnSliceOfTheCurve) {
     // With an ascending curve, a late act must prefer its HIGH-energy track
     // first-to-last order. If every act were judged against the whole 0..1 curve

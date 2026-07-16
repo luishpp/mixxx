@@ -111,12 +111,18 @@ diálogo de resultado.
 **Curadoria híbrida — o ato manda, a âncora fica.** Se as faixas têm o ato no comentário
 (`ATO 5 | ÂNCORA | ...`):
 
-1. **A ordem segue a narrativa**: o motor otimiza **dentro** de cada ato e nunca troca faixas
-   entre atos. Faixas sem ato (`EXTRA`) vão para o fim.
-2. **As âncoras ficam presas** na posição que o plano deu a elas — o lugar delas na numeração
-   dentro do ato. Assim *Space Explorers* fecha o Ato 1 e *Under Control* fecha o Ato 4, em vez de
-   o motor enterrá-las no meio. Aparecem com `[locked]` no relatório.
-3. **O peso da harmonia varia por ato** (§10.5): mais alto no Portal, Melodic House, Melodic
+1. **A ordem do plano é a base.** O §8 dá a cada faixa uma função ("introdução cinematográfica",
+   "ponte introdutória") que o motor **não tem como enxergar** — ele só conhece harmonia, tempo,
+   energia e frase. Então a ordem da numeração **lidera**, e o motor só assume se **superar o
+   score dela por uma margem clara**. Quando isso acontece, a ordem do plano continua sendo
+   oferecida como uma das alternativas — a curadoria humana nunca é descartada em silêncio.
+2. **A ordem segue a narrativa**: o motor nunca troca faixas entre atos. Faixas sem ato
+   (`EXTRA`) vão para o fim.
+3. **As âncoras ficam presas** na posição que o plano deu a elas. Assim *Space Explorers* fecha o
+   Ato 1 e *Under Control* fecha o Ato 4. Aparecem com `[locked]` no relatório.
+4. **Cada ato é julgado na sua fatia da curva de energia** — o Ato 5 é medido contra os ~75% da
+   jornada onde ele realmente está, não contra a curva inteira.
+5. **O peso da harmonia varia por ato** (§10.5): mais alto no Portal, Melodic House, Melodic
    Techno e Final; **mais frouxo** nos flashes nostálgicos e no peak crossover, onde o plano
    aceita tom contrastante em troca de impacto.
 
