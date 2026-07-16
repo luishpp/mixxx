@@ -45,6 +45,14 @@ class PreviewExecutor : public QObject {
 
     bool controlsAvailable() const;
 
+    /// Beats elapsed since the transition started, from the source deck's
+    /// normalized play position. Pure and static so the timing loop — the part
+    /// that decides when a transition ends — can be tested without an engine.
+    static double elapsedBeats(double pos01,
+            double startPos01,
+            double sourceDurationMs,
+            double refBpm);
+
     /// Loads the pair into the two decks and, once both are ready, cues them and
     /// runs the transition. Track durations (ms) are used to map the source
     /// playback position to elapsed beats.

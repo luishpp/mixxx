@@ -5,6 +5,7 @@
 #include "music_sync/domain/preview_program.h"
 #include "music_sync/domain/transition_plan.h"
 #include "music_sync/planner/preview_compiler.h"
+#include "music_sync/preview/preview_executor.h"
 
 namespace mixxx::music_sync {
 namespace {
@@ -80,6 +81,37 @@ TEST(MusicSyncPreviewTest, ZeroLengthRampEmitsEndpoint) {
     ASSERT_EQ(program.writes.size(), 1);
     EXPECT_DOUBLE_EQ(program.writes.first().atBeat, 10.0);
     EXPECT_DOUBLE_EQ(program.writes.first().value, 0.9);
+}
+
+TEST(MusicSyncPreviewTest, ElapsedBeatsFromDeckPosition) {
+    // Real numbers from the set: Weightless, 2:59 long, 130 BPM, cued to its
+    // exit window at 1:58. An 8-bar cut is 32 beats -> it must end ~14.8 s in,
+    // at roughly 2:13 of the track. The timing loop that decides this had no
+    // test at all, which is how a cut ran for ~60 s unnoticed.
+    constexpr double kDurationMs = 179000.0; // 2:59
+    constexpr double kBpm = 130.0;
+    const double startPos = 118000.0 / kDurationMs; // cued at 1:58
+
+    EXPECT_DOUBLE_EQ(
+            PreviewExecutor::elapsedBeats(startPos, startPos, kDurationMs, kBpm), 0.0);
+
+    // 14.77 s later = 32 beats = the 8 bars.
+    const double posAtCutEnd = (118000.0 + 32.0 * 60000.0 / kBpm) / kDurationMs;
+    EXPECT_NEAR(PreviewExecutor::elapsedBeats(posAtCutEnd, startPos, kDurationMs, kBpm),
+            32.0,
+            1e-6);
+
+    // Half a minute in, we must be well past the cut, not still inside it.
+    const double posAt30s = (118000.0 + 30000.0) / kDurationMs;
+    EXPECT_GT(PreviewExecutor::elapsedBeats(posAt30s, startPos, kDurationMs, kBpm), 32.0);
+}
+
+TEST(MusicSyncPreviewTest, ElapsedBeatsGuardsBadInput) {
+    // Never advance on a rewind, a missing duration or a missing tempo — any of
+    // which would otherwise make a transition run forever or end instantly.
+    EXPECT_DOUBLE_EQ(PreviewExecutor::elapsedBeats(0.2, 0.5, 179000.0, 130.0), 0.0);
+    EXPECT_DOUBLE_EQ(PreviewExecutor::elapsedBeats(0.6, 0.5, 0.0, 130.0), 0.0);
+    EXPECT_DOUBLE_EQ(PreviewExecutor::elapsedBeats(0.6, 0.5, 179000.0, 0.0), 0.0);
 }
 
 TEST(MusicSyncPreviewTest, BeatSyncOnlyForBlendingTransitions) {

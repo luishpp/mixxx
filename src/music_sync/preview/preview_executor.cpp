@@ -175,29 +175,54 @@ void PreviewExecutor::begin() {
     m_source.play->set(1.0);
     m_target.play->set(1.0);
 
+    kLogger.info() << "Preview begin:"
+                   << "type=" << transitionTypeName(m_program.type)
+                   << "startPos01=" << m_startPos01
+                   << "refBpm=" << m_refBpm
+                   << "sourceDurationMs=" << m_sourceDurationMs
+                   << "durationBeats=" << m_program.durationBeats
+                   << "durationBars=" << (m_program.durationBeats / 4.0)
+                   << "writes=" << m_program.writes.size()
+                   << "expectedSeconds="
+                   << (m_refBpm > 0.0 ? m_program.durationBeats * 60.0 / m_refBpm : -1.0);
+
     setState(State::Transitioning,
             beatSync ? QStringLiteral("Running transition (beat-synced)")
                      : QStringLiteral("Running transition (no sync: each track keeps its tempo)"));
     m_pTimer->start();
 }
 
+double PreviewExecutor::elapsedBeats(double pos01,
+        double startPos01,
+        double sourceDurationMs,
+        double refBpm) {
+    if (sourceDurationMs <= 0.0 || refBpm <= 0.0) {
+        return 0.0;
+    }
+    const double elapsedMs = (pos01 - startPos01) * sourceDurationMs;
+    if (elapsedMs <= 0.0) {
+        return 0.0;
+    }
+    return elapsedMs * refBpm / 60000.0;
+}
+
 void PreviewExecutor::onTick() {
     if (m_state != State::Transitioning) {
         return;
     }
-    double elapsedMs = (m_source.playPosition->get() - m_startPos01) * m_sourceDurationMs;
-    if (elapsedMs < 0.0) {
-        elapsedMs = 0.0;
-    }
-    const double elapsedBeats = elapsedMs * m_refBpm / 60000.0;
+    const double beats = elapsedBeats(m_source.playPosition->get(),
+            m_startPos01,
+            m_sourceDurationMs,
+            m_refBpm);
 
     while (m_nextWrite < m_program.writes.size() &&
-            m_program.writes.at(m_nextWrite).atBeat <= elapsedBeats) {
+            m_program.writes.at(m_nextWrite).atBeat <= beats) {
         applyWrite(m_program.writes.at(m_nextWrite));
         ++m_nextWrite;
     }
-
-    if (elapsedBeats >= m_program.durationBeats) {
+    if (beats >= m_program.durationBeats) {
+        kLogger.debug() << "Preview finishing at beat" << beats << "of"
+                        << m_program.durationBeats;
         finish();
     }
 }
