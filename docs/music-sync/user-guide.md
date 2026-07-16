@@ -111,11 +111,15 @@ diálogo de resultado.
 **Curadoria híbrida — o ato manda, a âncora fica.** Se as faixas têm o ato no comentário
 (`ATO 5 | ÂNCORA | ...`):
 
-1. **A ordem do plano é a base.** O §8 dá a cada faixa uma função ("introdução cinematográfica",
-   "ponte introdutória") que o motor **não tem como enxergar** — ele só conhece harmonia, tempo,
-   energia e frase. Então a ordem da numeração **lidera**, e o motor só assume se **superar o
-   score dela por uma margem clara**. Quando isso acontece, a ordem do plano continua sendo
-   oferecida como uma das alternativas — a curadoria humana nunca é descartada em silêncio.
+1. **A ordem do plano sempre lidera.** A alternativa 1 é a ordem da numeração das faixas; as
+   propostas do motor vêm depois, com os scores lado a lado, para você comparar. **O motor
+   informa, não decide.**
+
+   > Por quê: tentamos deixar o motor assumir quando superasse o score do plano, e o resultado
+   > foi pior. O score mede exatamente aquilo que o plano **não** otimiza — o Ato 1 do set real é
+   > `3B → 9B → 6B → 10A → 5A`, ruim pela roda Camelot, então o motor "ganhava" e entregava um set
+   > musicalmente pior. O §8 curou por narrativa e ouvido, e os tons ainda vêm da detecção do
+   > Mixxx, que erra. Comparar por score era o instrumento errado.
 2. **A ordem segue a narrativa**: o motor nunca troca faixas entre atos. Faixas sem ato
    (`EXTRA`) vão para o fim.
 3. **As âncoras ficam presas** na posição que o plano deu a elas. Assim *Space Explorers* fecha o

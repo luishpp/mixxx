@@ -69,11 +69,6 @@ QVector<LockedPosition> anchorLocks(const QVector<TrackFeatures>& group) {
     return locks;
 }
 
-/// The engine must beat the plan's own order by this much (in average pair
-/// score) before it is allowed to override it. Anything smaller is noise, and
-/// the plan carries human intent the engine cannot measure.
-constexpr double kPlanOverrideMargin = 0.02;
-
 /// The act's tracks in the order the plan gave them (by track number). Empty if
 /// any track lacks a number — then there is no plan order to honour.
 QVector<TrackFeatures> inPlanOrder(const QVector<TrackFeatures>& group) {
@@ -89,20 +84,6 @@ QVector<TrackFeatures> inPlanOrder(const QVector<TrackFeatures>& group) {
                 return a.planOrder() < b.planOrder();
             });
     return ordered;
-}
-
-double averagePairScore(const QVector<TrackFeatures>& ordered,
-        const ScoringWeights& weights,
-        double maxTempoPct) {
-    if (ordered.size() < 2) {
-        return 1.0;
-    }
-    double sum = 0.0;
-    for (int i = 0; i + 1 < ordered.size(); ++i) {
-        sum += PairScorer::score(ordered.at(i), ordered.at(i + 1), weights, maxTempoPct)
-                       .total;
-    }
-    return sum / (ordered.size() - 1);
 }
 
 QVector<std::int64_t> idsOf(const QVector<TrackFeatures>& ordered) {
@@ -246,31 +227,27 @@ QVector<Arrangement> SequenceOptimizer::arrange(
                     orders.append(order);
                 }
 
-                // The plan's own order is the baseline. Spec 8 gives every track
-                // a role ("introdução cinematográfica", "ponte introdutória")
-                // that the engine cannot see — it only knows harmony, tempo,
-                // energy and phrase. So the human order leads unless the engine
-                // clearly beats it; otherwise it stays on offer as an alternative.
+                // The plan's order always leads; the engine's routes follow as
+                // alternatives.
+                //
+                // Comparing them by score was tried and is the wrong instrument:
+                // the score measures exactly what the plan does not optimize for.
+                // Act 1's own order runs 3B -> 9B -> 6B -> 10A -> 5A, which is
+                // poor by Camelot adjacency, so the engine "wins" while producing
+                // a musically worse set — spec 8 curated it by narrative and ear
+                // ("introdução cinematográfica", "deixar a faixa respirar"), and
+                // the keys themselves come from Mixxx's detection, which errs.
+                // So the engine informs, it does not decide.
                 const QVector<TrackFeatures> baseline = inPlanOrder(group);
                 if (!baseline.isEmpty()) {
-                    const double baseScore =
-                            averagePairScore(baseline, sub.weights, maxTempoPct);
-                    const double engineScore = orders.isEmpty()
-                            ? -1.0
-                            : averagePairScore(orders.first(), sub.weights, maxTempoPct);
-                    // Drop an engine order identical to the plan's, so the same
-                    // route is not offered twice.
+                    // Never offer the same route twice.
                     const QVector<std::int64_t> baseIds = idsOf(baseline);
                     for (int i = orders.size() - 1; i >= 0; --i) {
                         if (idsOf(orders.at(i)) == baseIds) {
                             orders.removeAt(i);
                         }
                     }
-                    if (engineScore > baseScore + kPlanOverrideMargin) {
-                        orders.append(baseline); // engine earned the lead
-                    } else {
-                        orders.prepend(baseline);
-                    }
+                    orders.prepend(baseline);
                 }
                 perAct.append(orders);
             }
