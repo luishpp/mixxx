@@ -11,6 +11,7 @@ Abrir: **Opções → Music Sync**.
 
 Numa biblioteca nova, use nesta ordem:
 
+0. Marque ☑ **Enable Music Sync** (sem isso as ações ficam cinza).
 1. **Analyze missing (Mixxx)** — só se houver faixas sem BPM/tom. Espere terminar (ele já re-snapshota sozinho).
 2. **Read native analysis from library** — calcula tudo e grava no sidecar.
 3. Escolha o **preset de energia** (combo).
@@ -25,6 +26,7 @@ Numa biblioteca nova, use nesta ordem:
 
 ## Pré-requisitos (senão nada toca)
 
+- **O interruptor marcado**: ☑ *Enable Music Sync* — desmarcado, os botões ficam cinza.
 - **Saída de áudio configurada**: *Preferences → Sound Hardware*. Evite dispositivos virtuais
   (ex.: FxSound); aponte para a placa física. Com **WASAPI**, a *Taxa de Amostragem* precisa ser
   **igual à do dispositivo no Windows** (geralmente 48000 Hz), senão dá `Invalid sample rate`.
@@ -36,15 +38,19 @@ Numa biblioteca nova, use nesta ordem:
 
 ## Os controles, um a um
 
-### ☐ Enable Music Sync (stored in the sidecar)
+### ☑ Enable Music Sync (stored in the sidecar)
 
-> ⚠️ **Hoje este checkbox não tem efeito nenhum.** Ele apenas grava a chave `module_enabled`
-> no sidecar; **nenhuma parte do código lê esse valor** para habilitar ou bloquear algo.
-> É um resquício da Fase 1 (serviu para validar a persistência do sidecar). Pode ignorá-lo:
-> **marcado ou desmarcado, todos os botões funcionam igual.**
+**É o interruptor do painel.** Desmarcado, **todas as ações ficam desabilitadas** (os 4 botões e o
+combo de preset) e o painel avisa *"Music Sync is off"*. O estado é gravado no sidecar
+(`module_enabled`), então **persiste entre sessões** — se abrir o painel e tudo estiver cinza,
+provavelmente é só marcar a caixa.
 
-O que realmente habilita/desabilita o painel é o **sidecar abrir com sucesso**. Se falhar, o
-rótulo de status avisa e todos os controles ficam cinza — **sem afetar a reprodução do Mixxx**.
+Uma ação só fica disponível quando as **três** condições valem: o **sidecar abriu**, o módulo está
+**marcado** e **não há análise em andamento**. Durante o *Analyze missing* tudo (inclusive o
+interruptor) fica bloqueado até terminar.
+
+Se o sidecar falhar ao abrir, o rótulo de status avisa e tudo fica cinza — **sem afetar a
+reprodução do Mixxx**.
 
 ### ▸ Read native analysis from library
 

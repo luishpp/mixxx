@@ -42,8 +42,14 @@ class DlgMusicSync : public QDialog {
   private:
     void populateTable(const QVector<TrackFeatures>& rows);
     void setBusy(bool busy);
+    /// Actions are usable only when the sidecar opened, the module is enabled
+    /// and no analysis run is in flight. Single place so the three conditions
+    /// cannot disagree.
+    void updateActionsEnabled();
 
     MusicSyncController* m_pController;
+    bool m_ready;
+    bool m_busy;
     QLabel* m_pStatusLabel;
     QCheckBox* m_pEnabledCheckBox;
     QPushButton* m_pSnapshotButton;

@@ -78,6 +78,8 @@ namespace mixxx::music_sync {
 DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices> pCoreServices)
         : QDialog(pParent),
           m_pController(new MusicSyncController(std::move(pCoreServices), this)),
+          m_ready(false),
+          m_busy(false),
           m_pStatusLabel(nullptr),
           m_pEnabledCheckBox(nullptr),
           m_pSnapshotButton(nullptr),
@@ -91,6 +93,7 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
     resize(760, 480);
 
     const bool ready = m_pController->initialize();
+    m_ready = ready;
 
     auto* pLayout = new QVBoxLayout(this);
 
@@ -116,7 +119,8 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
 
     m_pEnabledCheckBox = new QCheckBox(
             tr("Enable Music Sync (stored in the sidecar)"), this);
-    m_pEnabledCheckBox->setEnabled(ready);
+    // setChecked() before connect(): the slot touches widgets built further
+    // down, so it must not fire while the panel is still being assembled.
     m_pEnabledCheckBox->setChecked(ready && m_pController->isModuleEnabled());
     connect(m_pEnabledCheckBox,
             &QCheckBox::toggled,
@@ -126,18 +130,16 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
 
     // Action row.
     auto* pActions = new QHBoxLayout();
+    // Enabled state for every action comes from updateActionsEnabled() below.
     m_pSnapshotButton = new QPushButton(tr("Read native analysis from library"), this);
-    m_pSnapshotButton->setEnabled(ready);
     connect(m_pSnapshotButton, &QPushButton::clicked, this, &DlgMusicSync::slotSnapshotLibrary);
     pActions->addWidget(m_pSnapshotButton);
 
     m_pReloadButton = new QPushButton(tr("Reload snapshots"), this);
-    m_pReloadButton->setEnabled(ready);
     connect(m_pReloadButton, &QPushButton::clicked, this, &DlgMusicSync::slotReloadSnapshots);
     pActions->addWidget(m_pReloadButton);
 
     m_pAnalyzeButton = new QPushButton(tr("Analyze missing (Mixxx)"), this);
-    m_pAnalyzeButton->setEnabled(ready);
     connect(m_pAnalyzeButton, &QPushButton::clicked, this, &DlgMusicSync::slotAnalyzeMissing);
     pActions->addWidget(m_pAnalyzeButton);
 
@@ -148,11 +150,9 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
     m_pEnergyPreset->addItem(tr("Waves"), static_cast<int>(EnergyPreset::Waves));
     m_pEnergyPreset->addItem(tr("Constant"), static_cast<int>(EnergyPreset::Constant));
     m_pEnergyPreset->setCurrentIndex(2); // Late peak
-    m_pEnergyPreset->setEnabled(ready);
     pActions->addWidget(m_pEnergyPreset);
 
     m_pGenerateButton = new QPushButton(tr("Generate sequence"), this);
-    m_pGenerateButton->setEnabled(ready);
     connect(m_pGenerateButton, &QPushButton::clicked, this, &DlgMusicSync::slotGenerateSequence);
     pActions->addWidget(m_pGenerateButton);
 
@@ -187,23 +187,47 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
     connect(pButtons, &QDialogButtonBox::rejected, this, &QDialog::close);
     pLayout->addWidget(pButtons);
 
+    updateActionsEnabled();
+    if (ready && !m_pEnabledCheckBox->isChecked()) {
+        m_pSummaryLabel->setText(tr("Music Sync is off — enable it to use the panel."));
+    }
+
     // Show any snapshots stored in a previous session.
     if (ready) {
         populateTable(m_pController->loadSnapshots());
     }
 }
 
+void DlgMusicSync::updateActionsEnabled() {
+    if (!m_pSnapshotButton) {
+        return; // the panel is still being assembled
+    }
+    const bool enabled = m_ready && m_pEnabledCheckBox->isChecked() && !m_busy;
+    m_pSnapshotButton->setEnabled(enabled);
+    m_pReloadButton->setEnabled(enabled);
+    m_pAnalyzeButton->setEnabled(enabled);
+    m_pEnergyPreset->setEnabled(enabled);
+    m_pGenerateButton->setEnabled(enabled);
+    // The switch itself stays usable unless the sidecar failed or work is running.
+    m_pEnabledCheckBox->setEnabled(m_ready && !m_busy);
+}
+
 void DlgMusicSync::slotModuleEnabledToggled(bool checked) {
     if (!m_pController->setModuleEnabled(checked)) {
         kLogger.warning() << "Could not persist module_enabled setting";
     }
+    updateActionsEnabled();
+    if (m_pSummaryLabel) {
+        m_pSummaryLabel->setText(
+                checked ? QString() : tr("Music Sync is off — enable it to use the panel."));
+    }
 }
 
 void DlgMusicSync::slotSnapshotLibrary() {
-    m_pSnapshotButton->setEnabled(false);
+    setBusy(true);
     const QVector<TrackFeatures> rows = m_pController->snapshotLibrary(kSnapshotLimit);
     populateTable(rows);
-    m_pSnapshotButton->setEnabled(true);
+    setBusy(false);
 }
 
 void DlgMusicSync::slotReloadSnapshots() {
@@ -370,10 +394,8 @@ void DlgMusicSync::slotGenerateSequence() {
 }
 
 void DlgMusicSync::setBusy(bool busy) {
-    m_pSnapshotButton->setEnabled(!busy);
-    m_pReloadButton->setEnabled(!busy);
-    m_pAnalyzeButton->setEnabled(!busy);
-    m_pGenerateButton->setEnabled(!busy);
+    m_busy = busy;
+    updateActionsEnabled();
 }
 
 void DlgMusicSync::populateTable(const QVector<TrackFeatures>& rows) {
