@@ -8,6 +8,7 @@
 #include <QHash>
 #include <QHeaderView>
 #include <QLabel>
+#include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QStringList>
@@ -84,6 +85,7 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
           m_pEnabledCheckBox(nullptr),
           m_pSnapshotButton(nullptr),
           m_pReloadButton(nullptr),
+          m_pClearButton(nullptr),
           m_pAnalyzeButton(nullptr),
           m_pEnergyPreset(nullptr),
           m_pGenerateButton(nullptr),
@@ -138,6 +140,13 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
     m_pReloadButton = new QPushButton(tr("Reload snapshots"), this);
     connect(m_pReloadButton, &QPushButton::clicked, this, &DlgMusicSync::slotReloadSnapshots);
     pActions->addWidget(m_pReloadButton);
+
+    m_pClearButton = new QPushButton(tr("Clear snapshots"), this);
+    m_pClearButton->setToolTip(
+            tr("Removes every stored snapshot. Nothing is lost permanently — they "
+               "are recomputed from the Mixxx library."));
+    connect(m_pClearButton, &QPushButton::clicked, this, &DlgMusicSync::slotClearSnapshots);
+    pActions->addWidget(m_pClearButton);
 
     m_pAnalyzeButton = new QPushButton(tr("Analyze missing (Mixxx)"), this);
     connect(m_pAnalyzeButton, &QPushButton::clicked, this, &DlgMusicSync::slotAnalyzeMissing);
@@ -205,6 +214,7 @@ void DlgMusicSync::updateActionsEnabled() {
     const bool enabled = m_ready && m_pEnabledCheckBox->isChecked() && !m_busy;
     m_pSnapshotButton->setEnabled(enabled);
     m_pReloadButton->setEnabled(enabled);
+    m_pClearButton->setEnabled(enabled);
     m_pAnalyzeButton->setEnabled(enabled);
     m_pEnergyPreset->setEnabled(enabled);
     m_pGenerateButton->setEnabled(enabled);
@@ -232,6 +242,31 @@ void DlgMusicSync::slotSnapshotLibrary() {
 
 void DlgMusicSync::slotReloadSnapshots() {
     populateTable(m_pController->loadSnapshots());
+}
+
+void DlgMusicSync::slotClearSnapshots() {
+    const int stored = m_pController->snapshotCount();
+    if (stored <= 0) {
+        m_pSummaryLabel->setText(tr("No snapshots stored."));
+        return;
+    }
+    if (QMessageBox::question(this,
+                tr("Clear snapshots"),
+                tr("Remove all %1 stored snapshot(s)?\n\nNothing is lost permanently: "
+                   "they are recomputed from the Mixxx library with "
+                   "\"Read native analysis from library\".")
+                        .arg(stored),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No) != QMessageBox::Yes) {
+        return;
+    }
+    const int removed = m_pController->clearSnapshots();
+    if (removed < 0) {
+        m_pSummaryLabel->setText(tr("Could not clear the snapshots."));
+        return;
+    }
+    populateTable(m_pController->loadSnapshots());
+    m_pSummaryLabel->setText(tr("Cleared %1 snapshot(s).").arg(removed));
 }
 
 void DlgMusicSync::slotAnalyzeMissing() {

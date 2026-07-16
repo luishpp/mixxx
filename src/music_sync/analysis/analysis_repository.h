@@ -24,6 +24,19 @@ class AnalysisRepository {
 
     std::optional<TrackFeatures> loadByTrackId(std::int64_t mixxxTrackId) const;
 
+    /// Drops snapshots whose track is no longer in the library, so the sidecar
+    /// mirrors it instead of accumulating orphans forever. Returns how many were
+    /// removed, or -1 on failure.
+    ///
+    /// `liveTrackIds` must be the COMPLETE set of live library ids — passing a
+    /// partial set (e.g. a limited batch) would delete valid snapshots. An empty
+    /// list therefore means "the library is empty" and removes everything; the
+    /// caller must not pass an empty list when the library query merely failed.
+    int removeMissing(const QVector<std::int64_t>& liveTrackIds);
+
+    /// Removes every snapshot. Returns how many were removed, or -1 on failure.
+    int clear();
+
     int count() const;
 
   private:

@@ -177,9 +177,35 @@ QVector<TrackFeatures> MusicSyncController::snapshotLibrary(int limit) {
         result.append(features);
     }
     kLogger.info() << "Snapshotted" << result.size() << "library tracks";
+
+    // Make the sidecar mirror the library instead of accumulating orphans:
+    // drop snapshots whose track is gone. This needs the COMPLETE live id set,
+    // not the limited batch above — pruning against a partial set would delete
+    // valid snapshots. If the query fails we skip pruning rather than risk it.
+    QSqlQuery liveQuery(pCollection->database());
+    if (liveQuery.exec(QStringLiteral(
+                "SELECT id FROM library WHERE mixxx_deleted=0"))) {
+        QVector<std::int64_t> liveIds;
+        const int liveIdColumn = liveQuery.record().indexOf(QStringLiteral("id"));
+        while (liveQuery.next()) {
+            liveIds.append(liveQuery.value(liveIdColumn).toLongLong());
+        }
+        repository.removeMissing(liveIds);
+    } else {
+        kLogger.warning() << "Could not list live library ids; skipping prune:"
+                          << liveQuery.lastError();
+    }
+
     // The sidecar keeps the raw value; callers see the library-relative scale.
     normalizeLibraryEnergy(&result);
     return result;
+}
+
+int MusicSyncController::clearSnapshots() {
+    if (!m_pDatabase) {
+        return -1;
+    }
+    return AnalysisRepository(m_pDatabase->database()).clear();
 }
 
 QVector<TrackFeatures> MusicSyncController::loadSnapshots() const {

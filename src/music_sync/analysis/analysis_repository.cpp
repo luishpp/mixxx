@@ -4,6 +4,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QSet>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QSqlRecord>
@@ -310,6 +311,58 @@ std::optional<TrackFeatures> AnalysisRepository::loadByTrackId(std::int64_t mixx
         return readRow(query);
     }
     return std::nullopt;
+}
+
+int AnalysisRepository::removeMissing(const QVector<std::int64_t>& liveTrackIds) {
+    QSet<std::int64_t> live;
+    live.reserve(liveTrackIds.size());
+    for (std::int64_t id : liveTrackIds) {
+        live.insert(id);
+    }
+
+    // Diff in memory rather than building a huge NOT IN (...) clause: the
+    // sidecar holds a few hundred rows and the stale set is normally tiny.
+    QVector<std::int64_t> stale;
+    QSqlQuery select(m_database);
+    if (!select.exec(QStringLiteral("SELECT mixxx_track_id FROM MusicSyncTrackFeatures"))) {
+        kLogger.warning() << "Could not list snapshots to prune:" << select.lastError();
+        return -1;
+    }
+    while (select.next()) {
+        const std::int64_t id = select.value(0).toLongLong();
+        if (!live.contains(id)) {
+            stale.append(id);
+        }
+    }
+    if (stale.isEmpty()) {
+        return 0;
+    }
+
+    QSqlQuery del(m_database);
+    del.prepare(QStringLiteral(
+            "DELETE FROM MusicSyncTrackFeatures WHERE mixxx_track_id = :id"));
+    int removed = 0;
+    for (std::int64_t id : stale) {
+        del.bindValue(QStringLiteral(":id"), static_cast<qlonglong>(id));
+        if (!del.exec()) {
+            kLogger.warning() << "Could not prune snapshot" << id << ":" << del.lastError();
+            return -1;
+        }
+        ++removed;
+    }
+    kLogger.info() << "Pruned" << removed << "snapshot(s) no longer in the library";
+    return removed;
+}
+
+int AnalysisRepository::clear() {
+    const int before = count();
+    QSqlQuery query(m_database);
+    if (!query.exec(QStringLiteral("DELETE FROM MusicSyncTrackFeatures"))) {
+        kLogger.warning() << "Could not clear snapshots:" << query.lastError();
+        return -1;
+    }
+    kLogger.info() << "Cleared" << before << "snapshot(s)";
+    return before;
 }
 
 int AnalysisRepository::count() const {

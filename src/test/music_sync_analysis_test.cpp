@@ -95,4 +95,71 @@ TEST(MusicSyncAnalysisRepositoryTest, UpsertLoadRoundTrip) {
     EXPECT_FALSE(repo.loadByTrackId(9999).has_value());
 }
 
+TEST(MusicSyncAnalysisRepositoryTest, RemoveMissingPrunesOrphansOnly) {
+    QTemporaryDir tempDir;
+    ASSERT_TRUE(tempDir.isValid());
+    SidecarDatabase db(tempDir.filePath(QStringLiteral("music-sync-dj.sqlite")));
+    ASSERT_TRUE(db.open());
+    ASSERT_TRUE(db.applyMigrations());
+    AnalysisRepository repo(db.database());
+
+    ASSERT_TRUE(repo.upsert(makeFeatures(1)));
+    ASSERT_TRUE(repo.upsert(makeFeatures(2)));
+    ASSERT_TRUE(repo.upsert(makeFeatures(3)));
+    ASSERT_EQ(repo.count(), 3);
+
+    // Track 2 is gone from the library: only its snapshot is dropped.
+    EXPECT_EQ(repo.removeMissing(QVector<std::int64_t>({1, 3})), 1);
+    EXPECT_EQ(repo.count(), 2);
+    EXPECT_TRUE(repo.loadByTrackId(1).has_value());
+    EXPECT_FALSE(repo.loadByTrackId(2).has_value());
+    EXPECT_TRUE(repo.loadByTrackId(3).has_value());
+
+    // Idempotent: nothing left to prune.
+    EXPECT_EQ(repo.removeMissing(QVector<std::int64_t>({1, 3})), 0);
+    EXPECT_EQ(repo.count(), 2);
+
+    // Ids the sidecar has never seen do not resurrect or remove anything.
+    EXPECT_EQ(repo.removeMissing(QVector<std::int64_t>({1, 3, 42})), 0);
+    EXPECT_EQ(repo.count(), 2);
+}
+
+TEST(MusicSyncAnalysisRepositoryTest, RemoveMissingWithEmptyLiveSetDropsEverything) {
+    // Documents the sharp edge the caller must respect: an empty live set means
+    // "the library is empty", so it prunes all. The controller therefore skips
+    // pruning when the library query fails, instead of passing an empty list.
+    QTemporaryDir tempDir;
+    ASSERT_TRUE(tempDir.isValid());
+    SidecarDatabase db(tempDir.filePath(QStringLiteral("music-sync-dj.sqlite")));
+    ASSERT_TRUE(db.open());
+    ASSERT_TRUE(db.applyMigrations());
+    AnalysisRepository repo(db.database());
+
+    ASSERT_TRUE(repo.upsert(makeFeatures(1)));
+    ASSERT_TRUE(repo.upsert(makeFeatures(2)));
+    EXPECT_EQ(repo.removeMissing(QVector<std::int64_t>()), 2);
+    EXPECT_EQ(repo.count(), 0);
+}
+
+TEST(MusicSyncAnalysisRepositoryTest, ClearRemovesAllSnapshots) {
+    QTemporaryDir tempDir;
+    ASSERT_TRUE(tempDir.isValid());
+    SidecarDatabase db(tempDir.filePath(QStringLiteral("music-sync-dj.sqlite")));
+    ASSERT_TRUE(db.open());
+    ASSERT_TRUE(db.applyMigrations());
+    AnalysisRepository repo(db.database());
+
+    ASSERT_TRUE(repo.upsert(makeFeatures(1)));
+    ASSERT_TRUE(repo.upsert(makeFeatures(2)));
+    ASSERT_EQ(repo.count(), 2);
+
+    EXPECT_EQ(repo.clear(), 2);
+    EXPECT_EQ(repo.count(), 0);
+    EXPECT_TRUE(repo.loadAll().isEmpty());
+
+    // Clearing an empty sidecar is a no-op, not an error.
+    EXPECT_EQ(repo.clear(), 0);
+    EXPECT_EQ(repo.count(), 0);
+}
+
 } // namespace

@@ -74,6 +74,15 @@ nada** — não toca na biblioteca, não refaz janelas nem seções.
 
 **Use quando:** só quiser atualizar a visão do que está armazenado.
 
+### ▸ Clear snapshots
+
+Apaga **todos** os snapshots do sidecar (pede confirmação). **Nada se perde de forma
+permanente**: tudo é recomputável com *Read native analysis from library*. Sua biblioteca,
+waveforms, beatgrids e cues do Mixxx ficam intactos — são de outro banco.
+
+**Use quando:** quiser um reset limpo (ex.: refez a biblioteca do zero e quer garantir que
+nenhum resíduo sobrou).
+
 ### ▸ Analyze missing (Mixxx)
 
 Varre até 500 faixas e seleciona as que **não têm beatgrid/BPM ou não têm tom**. Nelas roda o
@@ -174,6 +183,12 @@ A faixa não tem **waveform** armazenado. Analise-a pela biblioteca do Mixxx (cl
 **Transições não mudaram depois de atualizar o módulo**
 Você clicou em *Reload snapshots* (que só relê o gravado). Clique em
 **Read native analysis from library** para recalcular.
+
+**Mudei/limpei a biblioteca, mas o Generate sequence mostra as faixas antigas**
+Os snapshots vivem no **sidecar**, não na biblioteca — limpar a biblioteca do Mixxx não mexe
+neles. Clique em **Read native analysis from library**: além de recalcular, ele agora **remove do
+sidecar as faixas que não existem mais** na biblioteca. Para um reset total, use
+**Clear snapshots**.
 
 **Uma faixa com BPM absurdo (ex.: 187.5 numa música de 112)**
 É erro de **beatgrid do Mixxx**, não do módulo. O planejador reage certo (avisa

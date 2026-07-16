@@ -57,6 +57,11 @@ class MusicSyncController : public QObject {
     /// Number of snapshots currently stored.
     int snapshotCount() const;
 
+    /// Removes every stored snapshot (the sidecar's analysis cache). Everything
+    /// it holds is recomputable from the Mixxx library. Returns how many were
+    /// removed, or -1 on failure.
+    int clearSnapshots();
+
     /// Generates ranked candidate sequences (>=3 when possible) from the
     /// analyzed snapshots, using the given intent. Empty when fewer than two
     /// analyzed tracks exist.
