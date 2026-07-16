@@ -81,6 +81,7 @@ TrackFeatures NativeAnalysisAdapter::extract(const TrackPointer& pTrack) {
     f.artist = pTrack->getArtist();
     f.album = pTrack->getAlbum();
     f.genre = pTrack->getGenre();
+    f.trackNumber = pTrack->getTrackNumber();
     parseSetPlanComment(pTrack->getComment(), &f.act, &f.setFunction);
 
     const double sampleRate = pTrack->getSampleRate().toDouble();

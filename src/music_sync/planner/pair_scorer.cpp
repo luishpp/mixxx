@@ -7,6 +7,53 @@
 
 namespace mixxx::music_sync {
 
+namespace {
+// How much of the score harmony takes in each profile. The spec's default is
+// 0.24; the Portal/Melodic/Final acts lean on harmony, the flash and peak acts
+// deliberately let a clashing key through when the energy is right.
+constexpr double kHarmonicPriority = 0.34;
+constexpr double kHarmonicRelaxed = 0.14;
+} // anonymous namespace
+
+ScoringWeights weightsForAct(int act, const ScoringWeights& base) {
+    double harmonic = base.harmonic;
+    switch (act) {
+    case 1: // Portal
+    case 2: // Melodic House
+    case 5: // Melodic Techno
+    case 7: // Final emocional
+        harmonic = kHarmonicPriority;
+        break;
+    case 4: // flashes nostálgicos
+    case 6: // peak crossover / trance
+        harmonic = kHarmonicRelaxed;
+        break;
+    default:
+        return base; // act 3 (groove) and unknown: spec 18.2 defaults
+    }
+
+    const double othersBase = base.tempo + base.phrase + base.energy +
+            base.vocalSafety + base.transitionWindow + base.style;
+    if (othersBase <= 0.0) {
+        return base;
+    }
+    // Rescale the rest so the weights still sum to 1.0 and keep their relative
+    // proportions — only harmony's share moves.
+    const double scale = (1.0 - harmonic) / othersBase;
+    ScoringWeights w = base;
+    w.harmonic = harmonic;
+    w.tempo *= scale;
+    w.phrase *= scale;
+    w.energy *= scale;
+    w.vocalSafety *= scale;
+    w.transitionWindow *= scale;
+    w.style *= scale;
+    w.version = QStringLiteral("%1/harmony%2")
+                        .arg(base.version)
+                        .arg(qRound(harmonic * 100.0));
+    return w;
+}
+
 double PairScorer::tempoCompatibility(double bpmA, double bpmB, double maxChangePercent) {
     if (bpmA <= 0.0 || bpmB <= 0.0) {
         return 0.3; // unknown tempo -> neutral-low

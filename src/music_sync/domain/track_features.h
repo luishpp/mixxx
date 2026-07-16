@@ -82,6 +82,24 @@ struct TrackFeatures {
     int act = 0;
     /// ÂNCORA / PONTE / FLASH / CODA / ... — its role in the set (spec 9).
     QString setFunction;
+    /// The track number from the set plan ("05", "33.1"). Gives each track its
+    /// canonical place inside its act, which is what pins an anchor.
+    QString trackNumber;
+
+    /// The plan's track number as a sortable value; -1 when absent. "33.1"
+    /// sorts between 33 and 34, which is exactly what the optional extras want.
+    double planOrder() const {
+        bool ok = false;
+        const double value = trackNumber.toDouble(&ok);
+        return ok ? value : -1.0;
+    }
+
+    /// Anchors hold their position; the engine arranges the rest around them
+    /// (spec 9 — hybrid curation).
+    bool isAnchor() const {
+        return setFunction.compare(QStringLiteral("ÂNCORA"), Qt::CaseInsensitive) == 0 ||
+                setFunction.compare(QStringLiteral("ANCORA"), Qt::CaseInsensitive) == 0;
+    }
 
     // --- Fase 3: advanced analysis, derived from the Mixxx waveform + tempo ---
     double overallEnergy = 0.0;    // mean energy 0..1, comparable across tracks

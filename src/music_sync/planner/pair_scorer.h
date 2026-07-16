@@ -20,6 +20,16 @@ struct ScoringWeights {
     QString version = QStringLiteral("pairscore-0.1.0");
 };
 
+/// Weights for a given act (spec 10.5: "priorizar harmonia" in the Portal,
+/// Melodic House, Melodic Techno and the emotional finale; harmony is
+/// "menos rígida" in the nostalgia flashes and the peak crossover). Act 3 and
+/// unknown acts keep the spec 18.2 defaults.
+///
+/// The remaining weights are rescaled so the total stays 1.0, keeping scores
+/// comparable across acts; the returned version records the profile, since the
+/// spec requires weights to be versioned.
+ScoringWeights weightsForAct(int act, const ScoringWeights& base = ScoringWeights());
+
 /// Decomposable score of a transition from track A to track B, so a suggestion
 /// can be explained from the same numbers used to rank it (spec RNF-008).
 struct PairScoreBreakdown {

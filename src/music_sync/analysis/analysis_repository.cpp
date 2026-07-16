@@ -190,6 +190,7 @@ mixxx::music_sync::TrackFeatures readRow(const QSqlQuery& query) {
     f.entryWindows = windowsFromJson(query.value(idx("entry_windows")).toString());
     f.exitWindows = windowsFromJson(query.value(idx("exit_windows")).toString());
     f.act = query.value(idx("act")).toInt();
+    f.trackNumber = query.value(idx("track_number")).toString();
     f.setFunction = query.value(idx("set_function")).toString();
     f.snapshotAt = query.value(idx("snapshot_at")).toString();
     return f;
@@ -202,7 +203,7 @@ const QString kSelectColumns = QStringLiteral(
         "intro_end_ms, outro_start_ms, outro_end_ms, analyzed, analyzer_version, "
         "overall_energy, energy_curve, bass_curve, phrase_markers, "
         "advanced_analyzer_version, sections, entry_windows, exit_windows, "
-        "act, set_function, snapshot_at");
+        "act, set_function, track_number, snapshot_at");
 } // anonymous namespace
 
 namespace mixxx::music_sync {
@@ -221,7 +222,7 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
             "  intro_end_ms, outro_start_ms, outro_end_ms, analyzed, analyzer_version,"
             "  overall_energy, energy_curve, bass_curve, phrase_markers,"
             "  advanced_analyzer_version, sections, entry_windows, exit_windows,"
-            "  act, set_function, snapshot_at) "
+            "  act, set_function, track_number, snapshot_at) "
             "VALUES ("
             "  :id, :location, :file_size, :title, :artist, :album, :genre,"
             "  :duration_ms, :sample_rate, :channels, :bitrate_kbps, :bpm, :key_chromatic,"
@@ -229,7 +230,7 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
             "  :intro_end_ms, :outro_start_ms, :outro_end_ms, :analyzed, :analyzer_version,"
             "  :overall_energy, :energy_curve, :bass_curve, :phrase_markers,"
             "  :advanced_analyzer_version, :sections, :entry_windows, :exit_windows,"
-            "  :act, :set_function, datetime('now')) "
+            "  :act, :set_function, :track_number, datetime('now')) "
             "ON CONFLICT(mixxx_track_id) DO UPDATE SET "
             "  location=excluded.location, file_size=excluded.file_size, title=excluded.title,"
             "  artist=excluded.artist, album=excluded.album, genre=excluded.genre,"
@@ -246,7 +247,7 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
             "  advanced_analyzer_version=excluded.advanced_analyzer_version,"
             "  sections=excluded.sections, entry_windows=excluded.entry_windows,"
             "  exit_windows=excluded.exit_windows, act=excluded.act,"
-            "  set_function=excluded.set_function,"
+            "  set_function=excluded.set_function, track_number=excluded.track_number,"
             "  snapshot_at=excluded.snapshot_at"));
 
     query.bindValue(QStringLiteral(":id"), static_cast<qlonglong>(f.mixxxTrackId));
@@ -279,6 +280,7 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
     query.bindValue(QStringLiteral(":advanced_analyzer_version"), f.advancedAnalyzerVersion);
     query.bindValue(QStringLiteral(":act"), f.act);
     query.bindValue(QStringLiteral(":set_function"), f.setFunction);
+    query.bindValue(QStringLiteral(":track_number"), f.trackNumber);
     query.bindValue(QStringLiteral(":sections"), sectionsToJson(f.sections));
     query.bindValue(QStringLiteral(":entry_windows"), windowsToJson(f.entryWindows));
     query.bindValue(QStringLiteral(":exit_windows"), windowsToJson(f.exitWindows));

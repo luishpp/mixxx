@@ -108,14 +108,21 @@ Precisa de **pelo menos 2 faixas analisadas** no sidecar (senão avisa). Roda o 
 (guloso + 2-opt, determinístico), produz **até 3 alternativas**, mostra a melhor e abre o
 diálogo de resultado.
 
-**Curadoria híbrida — o ato manda.** Se as faixas têm o ato no comentário
-(`ATO 5 | ÂNCORA | ...`), a ordem **segue a narrativa**: o motor otimiza **dentro** de cada ato e
-nunca troca faixas entre atos. Faixas sem ato (`EXTRA`) vão para o fim. Sem isso o otimizador
-maximiza compatibilidade globalmente e coloca um trance do Ato 6 depois de um groove do Ato 3 —
-harmonicamente suave, narrativamente errado.
+**Curadoria híbrida — o ato manda, a âncora fica.** Se as faixas têm o ato no comentário
+(`ATO 5 | ÂNCORA | ...`):
+
+1. **A ordem segue a narrativa**: o motor otimiza **dentro** de cada ato e nunca troca faixas
+   entre atos. Faixas sem ato (`EXTRA`) vão para o fim.
+2. **As âncoras ficam presas** na posição que o plano deu a elas — o lugar delas na numeração
+   dentro do ato. Assim *Space Explorers* fecha o Ato 1 e *Under Control* fecha o Ato 4, em vez de
+   o motor enterrá-las no meio. Aparecem com `[locked]` no relatório.
+3. **O peso da harmonia varia por ato** (§10.5): mais alto no Portal, Melodic House, Melodic
+   Techno e Final; **mais frouxo** nos flashes nostálgicos e no peak crossover, onde o plano
+   aceita tom contrastante em troca de impacto.
 
 > Se a sua biblioteca não tem o comentário de ato, nada muda: cai na otimização global de sempre.
-> Para ganhar os atos, prepare os arquivos com o comentário do §3 do plano.
+> As âncoras só são presas quando **todas** as faixas do ato têm número — sem isso, prender seria
+> chute. Para ganhar tudo isso, prepare os arquivos com o número e o comentário do §3 do plano.
 
 ---
 

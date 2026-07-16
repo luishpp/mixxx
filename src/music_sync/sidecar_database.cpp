@@ -122,6 +122,9 @@ bool SidecarDatabase::applyMigrations() {
         case 5:
             ok = migrateToV5();
             break;
+        case 6:
+            ok = migrateToV6();
+            break;
         default:
             kLogger.warning() << "No migration defined for version" << version;
             ok = false;
@@ -237,6 +240,14 @@ bool SidecarDatabase::migrateToV4() {
         }
     }
     return true;
+}
+
+bool SidecarDatabase::migrateToV6() {
+    // The plan's track number ("05", "33.1"): the track's canonical place inside
+    // its act, which is what pins an anchor.
+    return execStatement(m_database,
+            QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
+                           "ADD COLUMN track_number TEXT"));
 }
 
 bool SidecarDatabase::migrateToV5() {

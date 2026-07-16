@@ -313,6 +313,96 @@ TEST(MusicSyncOptimizerTest, NoActsBehavesLikeBefore) {
     EXPECT_EQ(seen.size(), 3);
 }
 
+TEST(MusicSyncOptimizerTest, AnchorHoldsItsPlaceInsideTheAct) {
+    // Act 1 of the plan: the anchor is track 05 and must CLOSE the act, even
+    // though the engine would rather move it (the others pair better with it
+    // in the middle).
+    QVector<TrackFeatures> tracks;
+    const auto make = [](std::int64_t id, const QString& num, const QString& fn) {
+        TrackFeatures f = makeTrack(id, 124.0, QStringLiteral("8A"), 0.5);
+        f.act = 1;
+        f.trackNumber = num;
+        f.setFunction = fn;
+        return f;
+    };
+    tracks.append(make(1, QStringLiteral("01"), QStringLiteral("INTRO")));
+    tracks.append(make(2, QStringLiteral("02"), QStringLiteral("PONTE")));
+    tracks.append(make(3, QStringLiteral("03"), QStringLiteral("GROOVE")));
+    tracks.append(make(4, QStringLiteral("04"), QStringLiteral("EMOCIONAL")));
+    tracks.append(make(5, QStringLiteral("05"), QStringLiteral("ÂNCORA")));
+    // A second act, so the act path (not the plain one) runs.
+    TrackFeatures second = makeTrack(6, 124.0, QStringLiteral("8A"), 0.5);
+    second.act = 2;
+    second.trackNumber = QStringLiteral("06");
+    tracks.append(second);
+
+    SequenceOptimizer::Options options;
+    const QVector<Arrangement> out = SequenceOptimizer::arrange(tracks, options);
+    ASSERT_FALSE(out.isEmpty());
+    const QVector<ArrangementItem>& items = out.first().items;
+    ASSERT_EQ(items.size(), 6);
+    // Track 5 is the anchor at rank 5 of act 1 -> index 4, i.e. it closes act 1.
+    EXPECT_EQ(items.at(4).mixxxTrackId, 5);
+    EXPECT_TRUE(items.at(4).locked);
+    EXPECT_FALSE(items.at(0).locked); // non-anchors stay free
+}
+
+TEST(MusicSyncOptimizerTest, NoAnchorLocksWithoutTrackNumbers) {
+    // An unprepped act (no plan numbers) must not get guessed positions.
+    QVector<TrackFeatures> tracks;
+    for (int i = 0; i < 3; ++i) {
+        TrackFeatures f = makeTrack(i + 1, 124.0, QStringLiteral("8A"), 0.5);
+        f.act = 1;
+        f.setFunction = QStringLiteral("ÂNCORA"); // anchor, but no number
+        tracks.append(f);
+    }
+    TrackFeatures second = makeTrack(9, 124.0, QStringLiteral("8A"), 0.5);
+    second.act = 2;
+    tracks.append(second);
+
+    SequenceOptimizer::Options options;
+    const QVector<Arrangement> out = SequenceOptimizer::arrange(tracks, options);
+    ASSERT_FALSE(out.isEmpty());
+    for (const ArrangementItem& item : out.first().items) {
+        EXPECT_FALSE(item.locked);
+    }
+}
+
+TEST(MusicSyncPairScoreTest, HarmonyWeightFollowsTheAct) {
+    const ScoringWeights base;
+    // Portal / Melodic House / Melodic Techno / Final: harmony leads (spec 10.5).
+    for (int act : {1, 2, 5, 7}) {
+        const ScoringWeights w = weightsForAct(act, base);
+        EXPECT_GT(w.harmonic, base.harmonic) << "act " << act;
+    }
+    // Nostalgia flashes and peak crossover: harmony deliberately looser.
+    for (int act : {4, 6}) {
+        const ScoringWeights w = weightsForAct(act, base);
+        EXPECT_LT(w.harmonic, base.harmonic) << "act " << act;
+    }
+    // Groove and unknown keep the spec defaults.
+    EXPECT_DOUBLE_EQ(weightsForAct(3, base).harmonic, base.harmonic);
+    EXPECT_DOUBLE_EQ(weightsForAct(0, base).harmonic, base.harmonic);
+
+    // Every profile still sums to 1.0, so scores stay comparable across acts.
+    for (int act = 0; act <= 7; ++act) {
+        const ScoringWeights w = weightsForAct(act, base);
+        const double sum = w.harmonic + w.tempo + w.phrase + w.energy +
+                w.vocalSafety + w.transitionWindow + w.style;
+        EXPECT_NEAR(sum, 1.0, 1e-9) << "act " << act;
+    }
+}
+
+TEST(MusicSyncPairScoreTest, HarmonyPriorityActPunishesAClashingKey) {
+    // The real symptom: in the Portal, a distant key still scored ~72% and won.
+    const TrackFeatures a = makeTrack(1, 125.0, QStringLiteral("3B"), 0.3);
+    const TrackFeatures b = makeTrack(2, 127.0, QStringLiteral("10A"), 0.3);
+    const ScoringWeights base;
+    const double defaultScore = PairScorer::score(a, b, base, 5.0).total;
+    const double portalScore = PairScorer::score(a, b, weightsForAct(1, base), 5.0).total;
+    EXPECT_LT(portalScore, defaultScore);
+}
+
 TrackFeatures makeEnergyTrack(std::int64_t id, double energy) {
     TrackFeatures f;
     f.mixxxTrackId = id;

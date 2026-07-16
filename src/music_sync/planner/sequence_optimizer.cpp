@@ -2,6 +2,7 @@
 
 #include <QHash>
 #include <QMap>
+#include <QSet>
 #include <algorithm>
 #include <cmath>
 
@@ -42,13 +43,40 @@ double routeTotal(const QVector<int>& route, const Matrix& m) {
     return sum / (route.size() - 1);
 }
 
+/// Pins each anchor of `group` to the position the plan gave it: its rank when
+/// the act's tracks are put in track-number order. Returns nothing when the
+/// tracks carry no usable numbers, so an unprepped library is untouched.
+QVector<LockedPosition> anchorLocks(const QVector<TrackFeatures>& group) {
+    QVector<LockedPosition> locks;
+    QVector<int> byPlan;
+    for (int i = 0; i < group.size(); ++i) {
+        if (group.at(i).planOrder() < 0.0) {
+            return locks; // incomplete numbering: pinning would be a guess
+        }
+        byPlan.append(i);
+    }
+    std::sort(byPlan.begin(), byPlan.end(), [&group](int a, int b) {
+        const double pa = group.at(a).planOrder();
+        const double pb = group.at(b).planOrder();
+        return pa != pb ? pa < pb : a < b;
+    });
+    for (int pos = 0; pos < byPlan.size(); ++pos) {
+        const TrackFeatures& track = group.at(byPlan.at(pos));
+        if (track.isAnchor()) {
+            locks.append({pos, track.mixxxTrackId});
+        }
+    }
+    return locks;
+}
+
 /// Rebuilds an Arrangement from a final track order, recomputing every pair from
 /// scratch. Used by the act path: concatenating per-act routes creates new pairs
 /// at the act boundaries that no sub-arrangement ever scored.
 Arrangement buildFromOrderedTracks(const QVector<TrackFeatures>& ordered,
         const ScoringWeights& weights,
         double maxTempoPct,
-        const QVector<EnergyPoint>& curve) {
+        const QVector<EnergyPoint>& curve,
+        const QSet<std::int64_t>& lockedIds) {
     Arrangement arr;
     arr.algorithmVersion = SequenceOptimizer::kAlgorithmVersion;
     int tempoWarnings = 0;
@@ -58,10 +86,13 @@ Arrangement buildFromOrderedTracks(const QVector<TrackFeatures>& ordered,
         ArrangementItem item;
         item.mixxxTrackId = track.mixxxTrackId;
         item.position = pos;
+        item.locked = lockedIds.contains(track.mixxxTrackId);
         if (pos > 0) {
             const TrackFeatures& prev = ordered.at(pos - 1);
-            const PairScoreBreakdown bd =
-                    PairScorer::score(prev, track, weights, maxTempoPct);
+            // Score each transition with the weights of the act it lands in, so
+            // the reported number matches the one that drove the optimization.
+            const PairScoreBreakdown bd = PairScorer::score(
+                    prev, track, weightsForAct(track.act, weights), maxTempoPct);
             item.pairScoreFromPrevious = bd.total;
             item.explanationFromPrevious = ExplanationBuilder::forPair(prev, track, bd);
             pairSum += bd.total;
@@ -130,11 +161,22 @@ QVector<Arrangement> SequenceOptimizer::arrange(
         }
         // One group = nothing to constrain; fall through (also ends the recursion).
         if (actOrder.size() > 1) {
-            Options sub = options;
-            sub.respectActs = false;
-            sub.locks.clear(); // lock positions are global; meaningless per act
             QVector<QVector<Arrangement>> perAct;
+            QSet<std::int64_t> lockedIds;
             for (int act : actOrder) {
+                Options sub = options;
+                sub.respectActs = false;
+                // Harmony matters more in some acts than others (spec 10.5).
+                sub.weights = weightsForAct(act, options.weights);
+                // Hybrid curation (spec 9): the act's anchors hold their
+                // canonical place — the one the plan gave them, i.e. their rank
+                // by track number inside the act — and the engine arranges the
+                // rest around them. Without this, nothing stops the optimizer
+                // from burying the anchor that defines the act mid-way.
+                sub.locks = anchorLocks(byAct.value(act));
+                for (const LockedPosition& lock : sub.locks) {
+                    lockedIds.insert(lock.mixxxTrackId);
+                }
                 perAct.append(arrange(byAct.value(act), sub));
             }
 
@@ -163,7 +205,7 @@ QVector<Arrangement> SequenceOptimizer::arrange(
                     break; // no act has anything new left: stop inventing duplicates
                 }
                 result.append(buildFromOrderedTracks(
-                        ordered, options.weights, maxTempoPct, actCurve));
+                        ordered, options.weights, maxTempoPct, actCurve, lockedIds));
             }
             return result;
         }
