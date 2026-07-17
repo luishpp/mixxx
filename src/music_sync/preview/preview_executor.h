@@ -13,6 +13,8 @@ class QTimer;
 
 namespace mixxx::music_sync {
 
+class DeckAdapter;
+
 /// Drives two real Mixxx decks through a compiled PreviewProgram (Fase 6 /
 /// RF-010). Everything runs on the GUI thread and talks to the engine only via
 /// ControlProxy (thread-safe, non-blocking) — no I/O, no locks, nothing heavy
@@ -78,34 +80,17 @@ class PreviewExecutor : public QObject {
     void onCrossfaderChanged(double value);
 
   private:
-    struct DeckControls {
-        ControlProxy* play = nullptr;
-        ControlProxy* playPosition = nullptr;
-        ControlProxy* trackSamples = nullptr;
-        ControlProxy* bpm = nullptr;
-        ControlProxy* syncEnabled = nullptr;
-        ControlProxy* volume = nullptr;
-        ControlProxy* orientation = nullptr;
-        ControlProxy* eqLow = nullptr;
-        ControlProxy* filter = nullptr;
-    };
-
     void setState(State state, const QString& message = QString());
     void cueDecks();
     void begin();
     void finish();
     void handControlsToUser();
     void applyWrite(const ControlWrite& write);
-    ControlProxy* resolve(const QString& control);
 
     std::shared_ptr<PlayerManager> m_pPlayerManager;
-    int m_sourceDeckIndex;
-    int m_targetDeckIndex;
-    QString m_sourceGroup;
-    QString m_targetGroup;
-
-    DeckControls m_source;
-    DeckControls m_target;
+    // One definition of "a Mixxx deck", shared with the set executor.
+    DeckAdapter* m_pSource = nullptr;
+    DeckAdapter* m_pTarget = nullptr;
     ControlProxy* m_pCrossfader = nullptr;
 
     QTimer* m_pTimer = nullptr;

@@ -7,6 +7,7 @@
 #include "control/controlproxy.h"
 #include "engine/channels/enginechannel.h"
 #include "mixer/playermanager.h"
+#include "music_sync/preview/deck_adapter.h"
 #include "util/logger.h"
 
 namespace {
@@ -17,15 +18,6 @@ constexpr int kLoadPollMs = 50;
 constexpr int kMaxLoadPolls = 120; // ~6 s before giving up on a load
 constexpr double kCrossfaderUserTolerance = 0.02;
 
-// EQ low band (canonical effect-slot control): 0 kill .. 1 unity .. 4 boost.
-QString eqLowGroup(const QString& channelGroup) {
-    return QStringLiteral("[EqualizerRack1_%1_Effect1]").arg(channelGroup);
-}
-
-// QuickEffect (filter) super knob: 0..1, 0.5 neutral.
-QString filterGroup(const QString& channelGroup) {
-    return QStringLiteral("[QuickEffectRack1_%1]").arg(channelGroup);
-}
 } // namespace
 
 namespace mixxx::music_sync {
@@ -34,28 +26,9 @@ PreviewExecutor::PreviewExecutor(std::shared_ptr<PlayerManager> pPlayerManager,
         int sourceDeckIndex,
         int targetDeckIndex,
         QObject* parent)
-        : QObject(parent),
-          m_pPlayerManager(std::move(pPlayerManager)),
-          m_sourceDeckIndex(sourceDeckIndex),
-          m_targetDeckIndex(targetDeckIndex),
-          m_sourceGroup(PlayerManager::groupForDeck(sourceDeckIndex)),
-          m_targetGroup(PlayerManager::groupForDeck(targetDeckIndex)) {
-    const auto makeDeck = [this](const QString& group) {
-        DeckControls d;
-        d.play = new ControlProxy(group, QStringLiteral("play"), this);
-        d.playPosition = new ControlProxy(group, QStringLiteral("playposition"), this);
-        d.trackSamples = new ControlProxy(group, QStringLiteral("track_samples"), this);
-        d.bpm = new ControlProxy(group, QStringLiteral("bpm"), this);
-        d.syncEnabled = new ControlProxy(group, QStringLiteral("sync_enabled"), this);
-        d.volume = new ControlProxy(group, QStringLiteral("volume"), this);
-        d.orientation = new ControlProxy(group, QStringLiteral("orientation"), this);
-        d.eqLow = new ControlProxy(
-                eqLowGroup(group), QStringLiteral("parameter1"), this);
-        d.filter = new ControlProxy(filterGroup(group), QStringLiteral("super1"), this);
-        return d;
-    };
-    m_source = makeDeck(m_sourceGroup);
-    m_target = makeDeck(m_targetGroup);
+        : QObject(parent), m_pPlayerManager(std::move(pPlayerManager)) {
+    m_pSource = new DeckAdapter(sourceDeckIndex, this);
+    m_pTarget = new DeckAdapter(targetDeckIndex, this);
     m_pCrossfader = new ControlProxy(
             QStringLiteral("[Master]"), QStringLiteral("crossfader"), this);
     m_pCrossfader->connectValueChanged(
@@ -73,11 +46,8 @@ PreviewExecutor::PreviewExecutor(std::shared_ptr<PlayerManager> pPlayerManager,
 PreviewExecutor::~PreviewExecutor() = default;
 
 bool PreviewExecutor::controlsAvailable() const {
-    return m_pCrossfader && m_pCrossfader->valid() && m_source.play &&
-            m_source.play->valid() && m_target.play && m_target.play->valid() &&
-            m_source.playPosition && m_source.playPosition->valid() &&
-            m_source.volume && m_source.volume->valid() && m_target.volume &&
-            m_target.volume->valid();
+    return m_pCrossfader && m_pCrossfader->valid() && m_pSource && m_pSource->valid() &&
+            m_pTarget && m_pTarget->valid();
 }
 
 void PreviewExecutor::setState(State state, const QString& message) {
@@ -110,16 +80,16 @@ void PreviewExecutor::preview(const PreviewProgram& program,
     m_nextWrite = 0;
     m_loadPolls = 0;
 
-    m_pPlayerManager->slotLoadTrackToPlayer(pSource, m_sourceGroup, false);
-    m_pPlayerManager->slotLoadTrackToPlayer(pTarget, m_targetGroup, false);
+    m_pPlayerManager->slotLoadTrackToPlayer(pSource, m_pSource->group(), false);
+    m_pPlayerManager->slotLoadTrackToPlayer(pTarget, m_pTarget->group(), false);
     setState(State::Loading, QStringLiteral("Loading pair into decks"));
     m_pLoadTimer->start();
 }
 
 void PreviewExecutor::pollLoaded() {
     ++m_loadPolls;
-    const bool sourceReady = m_source.trackSamples && m_source.trackSamples->get() > 0.0;
-    const bool targetReady = m_target.trackSamples && m_target.trackSamples->get() > 0.0;
+    const bool sourceReady = m_pSource->isLoaded();
+    const bool targetReady = m_pTarget->isLoaded();
     if (sourceReady && targetReady) {
         m_pLoadTimer->stop();
         cueDecks();
@@ -133,37 +103,37 @@ void PreviewExecutor::pollLoaded() {
 }
 
 void PreviewExecutor::cueDecks() {
-    m_source.play->set(0.0);
-    m_target.play->set(0.0);
+    m_pSource->setPlaying(false);
+    m_pTarget->setPlaying(false);
 
-    m_source.orientation->set(EngineChannel::LEFT);
-    m_target.orientation->set(EngineChannel::RIGHT);
+    m_pSource->setOrientation(EngineChannel::LEFT);
+    m_pTarget->setOrientation(EngineChannel::RIGHT);
 
     const double sourcePos =
             std::clamp(m_program.sourceStartMs / m_sourceDurationMs, 0.0, 1.0);
     const double targetPos =
             std::clamp(m_program.targetStartMs / m_targetDurationMs, 0.0, 1.0);
-    m_source.playPosition->set(sourcePos);
-    m_target.playPosition->set(targetPos);
+    // Quantize BEFORE seeking: the planned entry is a millisecond, and landing
+    // between beats is how a tempo-locked deck still comes in off-beat.
+    m_pSource->setQuantize(true);
+    m_pTarget->setQuantize(true);
+    m_pSource->seek(sourcePos);
+    m_pTarget->seek(targetPos);
 
-    m_source.volume->set(1.0);
-    m_target.volume->set(0.0);
-    m_source.eqLow->set(1.0);
-    m_target.eqLow->set(0.0); // pre-kill B bass; the program restores it mid-swap
-    if (m_source.filter->valid()) {
-        m_source.filter->set(0.5);
-    }
-    if (m_target.filter->valid()) {
-        m_target.filter->set(0.5);
-    }
+    m_pSource->setVolume(1.0);
+    m_pTarget->setVolume(0.0);
+    m_pSource->setEqLow(1.0);
+    m_pTarget->setEqLow(0.0); // pre-kill B bass; the program restores it mid-swap
+    m_pSource->setFilter(0.5);
+    m_pTarget->setFilter(0.5);
     m_lastCrossfaderSet = -1.0;
     m_pCrossfader->set(-1.0); // fully on the source deck
 }
 
 void PreviewExecutor::begin() {
     m_nextWrite = 0;
-    m_startPos01 = m_source.playPosition->get();
-    m_refBpm = m_source.bpm && m_source.bpm->get() > 0.0 ? m_source.bpm->get() : 128.0;
+    m_startPos01 = m_pSource->position();
+    m_refBpm = m_pSource->bpm() > 0.0 ? m_pSource->bpm() : 128.0;
 
     // Only tempo-lock when the transition actually overlaps both tracks. A cut
     // (or the Auto DJ fallback) is chosen precisely BECAUSE the tempos clash;
@@ -171,9 +141,14 @@ void PreviewExecutor::begin() {
     // 140 BPM track pulled to 112 is a 20% stretch — which is the opposite of
     // what a cut is for (spec 16 / 19.6).
     const bool beatSync = m_program.needsBeatSync();
-    m_target.syncEnabled->set(beatSync ? 1.0 : 0.0);
-    m_source.play->set(1.0);
-    m_target.play->set(1.0);
+    m_pTarget->setSync(beatSync);
+    m_pSource->setPlaying(true);
+    m_pTarget->setPlaying(true);
+    if (beatSync) {
+        // Tempo lock equalises the BPM; this is what puts the downbeats on top
+        // of each other.
+        m_pTarget->syncPhase();
+    }
 
     kLogger.info() << "Preview begin:"
                    << "type=" << transitionTypeName(m_program.type)
@@ -210,7 +185,7 @@ void PreviewExecutor::onTick() {
     if (m_state != State::Transitioning) {
         return;
     }
-    const double beats = elapsedBeats(m_source.playPosition->get(),
+    const double beats = elapsedBeats(m_pSource->position(),
             m_startPos01,
             m_sourceDurationMs,
             m_refBpm);
@@ -234,7 +209,7 @@ void PreviewExecutor::finish() {
         ++m_nextWrite;
     }
     m_pTimer->stop();
-    m_source.play->set(0.0); // the outgoing deck is done
+    m_pSource->setPlaying(false); // the outgoing deck is done
     handControlsToUser();
     m_lastCrossfaderSet = 0.0;
     m_pCrossfader->set(0.0);
@@ -242,60 +217,38 @@ void PreviewExecutor::finish() {
 }
 
 void PreviewExecutor::handControlsToUser() {
-    m_source.syncEnabled->set(0.0);
-    m_target.syncEnabled->set(0.0);
-    m_source.eqLow->set(1.0);
-    m_target.eqLow->set(1.0);
-    if (m_source.filter->valid()) {
-        m_source.filter->set(0.5);
-    }
-    if (m_target.filter->valid()) {
-        m_target.filter->set(0.5);
-    }
-    m_source.orientation->set(EngineChannel::CENTER);
-    m_target.orientation->set(EngineChannel::CENTER);
-    m_source.volume->set(1.0);
-    m_target.volume->set(1.0);
+    m_pSource->setSync(false);
+    m_pTarget->setSync(false);
+    m_pSource->setEqLow(1.0);
+    m_pTarget->setEqLow(1.0);
+    m_pSource->setFilter(0.5);
+    m_pTarget->setFilter(0.5);
+    m_pSource->setOrientation(EngineChannel::CENTER);
+    m_pTarget->setOrientation(EngineChannel::CENTER);
+    m_pSource->setVolume(1.0);
+    m_pTarget->setVolume(1.0);
 }
 
 void PreviewExecutor::applyWrite(const ControlWrite& write) {
-    if (write.control == QStringLiteral("targetPlay")) {
-        m_target.play->set(write.value >= 0.5 ? 1.0 : 0.0);
-        return;
-    }
-    ControlProxy* pProxy = resolve(write.control);
-    if (!pProxy || !pProxy->valid()) {
-        return;
-    }
-    if (write.control == QStringLiteral("crossfader")) {
+    const QString& control = write.control;
+    if (control == QStringLiteral("targetPlay")) {
+        m_pTarget->setPlaying(write.value >= 0.5);
+    } else if (control == QStringLiteral("targetVolume")) {
+        m_pTarget->setVolume(write.value);
+    } else if (control == QStringLiteral("sourceVolume")) {
+        m_pSource->setVolume(write.value);
+    } else if (control == QStringLiteral("targetLowEq")) {
+        m_pTarget->setEqLow(write.value);
+    } else if (control == QStringLiteral("sourceLowEq")) {
+        m_pSource->setEqLow(write.value);
+    } else if (control == QStringLiteral("sourceFilter")) {
+        m_pSource->setFilter(write.value);
+    } else if (control == QStringLiteral("targetFilter")) {
+        m_pTarget->setFilter(write.value);
+    } else if (control == QStringLiteral("crossfader")) {
         m_lastCrossfaderSet = write.value;
+        m_pCrossfader->set(write.value);
     }
-    pProxy->set(write.value);
-}
-
-ControlProxy* PreviewExecutor::resolve(const QString& control) {
-    if (control == QStringLiteral("crossfader")) {
-        return m_pCrossfader;
-    }
-    if (control == QStringLiteral("targetVolume")) {
-        return m_target.volume;
-    }
-    if (control == QStringLiteral("sourceVolume")) {
-        return m_source.volume;
-    }
-    if (control == QStringLiteral("targetLowEq")) {
-        return m_target.eqLow;
-    }
-    if (control == QStringLiteral("sourceLowEq")) {
-        return m_source.eqLow;
-    }
-    if (control == QStringLiteral("sourceFilter")) {
-        return m_source.filter;
-    }
-    if (control == QStringLiteral("targetFilter")) {
-        return m_target.filter;
-    }
-    return nullptr;
 }
 
 void PreviewExecutor::onCrossfaderChanged(double value) {
