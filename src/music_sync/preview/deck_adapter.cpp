@@ -26,6 +26,8 @@ DeckAdapter::DeckAdapter(int deckIndex, QObject* parent)
     m_pTrackSamples = new ControlProxy(m_group, QStringLiteral("track_samples"), this);
     m_pBpm = new ControlProxy(m_group, QStringLiteral("bpm"), this);
     m_pSyncEnabled = new ControlProxy(m_group, QStringLiteral("sync_enabled"), this);
+    m_pSyncPhase = new ControlProxy(m_group, QStringLiteral("beatsync_phase"), this);
+    m_pQuantize = new ControlProxy(m_group, QStringLiteral("quantize"), this);
     m_pVolume = new ControlProxy(m_group, QStringLiteral("volume"), this);
     m_pOrientation = new ControlProxy(m_group, QStringLiteral("orientation"), this);
     m_pEqLow = new ControlProxy(eqLowGroup(m_group), QStringLiteral("parameter1"), this);
@@ -68,6 +70,18 @@ void DeckAdapter::setPlaying(bool playing) {
 void DeckAdapter::setSync(bool enabled) {
     if (m_pSyncEnabled) {
         m_pSyncEnabled->set(enabled ? 1.0 : 0.0);
+    }
+}
+
+void DeckAdapter::setQuantize(bool enabled) {
+    if (m_pQuantize && m_pQuantize->valid()) {
+        m_pQuantize->set(enabled ? 1.0 : 0.0);
+    }
+}
+
+void DeckAdapter::syncPhase() {
+    if (m_pSyncPhase && m_pSyncPhase->valid()) {
+        m_pSyncPhase->set(1.0); // push button: firing it once performs the align
     }
 }
 

@@ -192,12 +192,20 @@ void SetExecutor::beginTransition() {
         kLogger.warning() << "Next deck not loaded yet; holding the handover";
         return; // spec 21.4: a track that is not loaded pauses the handover
     }
+    // Quantize BEFORE seeking: the entry is a millisecond from the analysis, and
+    // landing between beats is how a tempo-locked deck still comes in off-beat.
+    pNext->setQuantize(true);
     if (next.durationMs > 0) {
         pNext->seek(std::clamp(
                 static_cast<double>(next.startMs) / next.durationMs, 0.0, 1.0));
     }
     pNext->setSync(program.needsBeatSync());
     pNext->setPlaying(true);
+    if (program.needsBeatSync()) {
+        // Tempo lock keeps the BPMs equal; this puts the downbeats on top of
+        // each other. Without it the two decks run at the same speed, offset.
+        pNext->syncPhase();
+    }
 
     m_nextWrite = 0;
     m_startPos01 = pLive->position();
