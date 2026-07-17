@@ -19,6 +19,7 @@
 #include "music_sync/analysis/advanced_analysis_adapter.h"
 #include "music_sync/analysis/analysis_repository.h"
 #include "music_sync/analysis/native_analysis_adapter.h"
+#include "music_sync/analysis/override_repository.h"
 #include "music_sync/planner/energy_normalizer.h"
 #include "music_sync/planner/preview_compiler.h"
 #include "music_sync/planner/sequence_optimizer.h"
@@ -349,7 +350,12 @@ bool MusicSyncController::previewTransition(
         return false;
     }
 
-    const TransitionPlan plan = TransitionPlanner::plan(from, to, intent);
+    PairKey key;
+    key.sourceTrackId = from.mixxxTrackId;
+    key.targetTrackId = to.mixxxTrackId;
+    // Preview what the set will actually do, including the DJ's own choice.
+    const TransitionPlan plan =
+            TransitionPlanner::plan(from, to, intent, loadOverrides().value(key));
     const PreviewProgram program = PreviewCompiler::compile(plan);
 
     if (!m_pPreviewExecutor) {
@@ -409,7 +415,8 @@ bool MusicSyncController::runSet(const Arrangement& arrangement,
         kLogger.warning() << "No tracks in acts" << fromAct << "-" << toAct;
         return false;
     }
-    const SetProgram program = SetCompiler::compile(scoped, byId, intent);
+    const SetProgram program =
+            SetCompiler::compile(scoped, byId, intent, loadOverrides());
     if (program.items.isEmpty()) {
         return false;
     }
@@ -442,6 +449,25 @@ bool MusicSyncController::runSet(const Arrangement& arrangement,
     kLogger.info() << "Running set:" << program.explanation;
     m_pSetExecutor->start(program, tracks);
     return true;
+}
+
+QHash<PairKey, TransitionOverride> MusicSyncController::loadOverrides() const {
+    if (!m_pDatabase) {
+        return {};
+    }
+    return OverrideRepository(m_pDatabase->database()).loadAll();
+}
+
+bool MusicSyncController::setOverride(std::int64_t sourceTrackId,
+        std::int64_t targetTrackId,
+        const TransitionOverride& override) {
+    if (!m_pDatabase) {
+        return false;
+    }
+    PairKey key;
+    key.sourceTrackId = sourceTrackId;
+    key.targetTrackId = targetTrackId;
+    return OverrideRepository(m_pDatabase->database()).save(key, override);
 }
 
 void MusicSyncController::pauseSet() {

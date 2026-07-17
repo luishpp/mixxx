@@ -528,6 +528,84 @@ TEST(MusicSyncPairScoreTest, HarmonyPriorityActPunishesAClashingKey) {
     EXPECT_LT(portalScore, defaultScore);
 }
 
+TEST(MusicSyncTransitionTest, OverrideTypeWinsOverThePlanner) {
+    // RF-010: the DJ pins the type. The planner would pick a blend here.
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 124.5, QStringLiteral("9A"), 0.62);
+    EXPECT_NE(TransitionPlanner::plan(a, b, intent).type, TransitionType::CutOnPhrase);
+
+    TransitionOverride override;
+    override.type = TransitionType::CutOnPhrase;
+    EXPECT_EQ(TransitionPlanner::plan(a, b, intent, override).type,
+            TransitionType::CutOnPhrase);
+}
+
+TEST(MusicSyncTransitionTest, OverrideBarsBeatsTheHeuristicCaps) {
+    // A cut is normally capped at 8 bars — that cap is the planner's taste, and
+    // an explicit request overrules taste (only physics may object).
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 145.0, QStringLiteral("3B"), 0.60);
+    EXPECT_LE(TransitionPlanner::plan(a, b, intent).durationBars, 8);
+
+    TransitionOverride override;
+    override.type = TransitionType::CutOnPhrase;
+    override.bars = 24;
+    const TransitionPlan p = TransitionPlanner::plan(a, b, intent, override);
+    EXPECT_EQ(p.durationBars, 24);
+}
+
+TEST(MusicSyncTransitionTest, OverrideBeyondTheWindowIsAllowedButWarned) {
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 124.5, QStringLiteral("9A"), 0.62);
+    TransitionOverride override;
+    override.bars = 24; // the fixture's exit window is 16 bars
+    const TransitionPlan p = TransitionPlanner::plan(a, b, intent, override);
+    EXPECT_EQ(p.durationBars, 24); // honoured
+    bool warned = false;
+    for (const QString& w : p.warnings) {
+        if (w.contains(QStringLiteral("exit window"))) {
+            warned = true;
+        }
+    }
+    EXPECT_TRUE(warned); // but told
+}
+
+TEST(MusicSyncTransitionTest, OverrideCannotOutlastTheTrack) {
+    // Physics nobody overrules: the fixture exits at 200 s of a 300 s track, so
+    // roughly 51 bars remain at 124 BPM. Asking for 200 would run the source out
+    // mid-handover.
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 124.5, QStringLiteral("9A"), 0.62);
+    TransitionOverride override;
+    override.bars = 200;
+    const TransitionPlan p = TransitionPlanner::plan(a, b, intent, override);
+    EXPECT_LT(p.durationBars, 200);
+    EXPECT_GT(p.durationBars, 0);
+    bool warned = false;
+    for (const QString& w : p.warnings) {
+        if (w.contains(QStringLiteral("trimmed"))) {
+            warned = true;
+        }
+    }
+    EXPECT_TRUE(warned);
+}
+
+TEST(MusicSyncTransitionTest, EmptyOverrideChangesNothing) {
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 124.5, QStringLiteral("9A"), 0.62);
+    const TransitionPlan planned = TransitionPlanner::plan(a, b, intent);
+    const TransitionPlan defaulted =
+            TransitionPlanner::plan(a, b, intent, TransitionOverride());
+    EXPECT_TRUE(TransitionOverride().isEmpty());
+    EXPECT_EQ(defaulted.type, planned.type);
+    EXPECT_EQ(defaulted.durationBars, planned.durationBars);
+}
+
 TrackFeatures makeEnergyTrack(std::int64_t id, double energy) {
     TrackFeatures f;
     f.mixxxTrackId = id;

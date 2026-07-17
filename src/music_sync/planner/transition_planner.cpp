@@ -144,8 +144,10 @@ void buildAutomation(TransitionPlan& plan) {
 
 } // anonymous namespace
 
-TransitionPlan TransitionPlanner::plan(
-        const TrackFeatures& from, const TrackFeatures& to, const MixIntent& intent) {
+TransitionPlan TransitionPlanner::plan(const TrackFeatures& from,
+        const TrackFeatures& to,
+        const MixIntent& intent,
+        const TransitionOverride& override) {
     TransitionPlan plan;
     plan.sourceTrackId = from.mixxxTrackId;
     plan.targetTrackId = to.mixxxTrackId;
@@ -153,22 +155,53 @@ TransitionPlan TransitionPlanner::plan(
     const double maxTempoPct = intent.maxTempoChangePercent > 0.0
             ? intent.maxTempoChangePercent
             : tempo_tolerance::kBalanced;
-    plan.type = chooseType(from, to, maxTempoPct);
+    // The DJ's choice wins; otherwise the planner picks.
+    plan.type = override.type ? *override.type : chooseType(from, to, maxTempoPct);
+    QVector<QString> overrideWarnings;
 
     plan.sourceExitMs = !from.exitWindows.isEmpty()
             ? from.exitWindows.first().startMs
             : std::max<std::int64_t>(0, from.durationMs - 60000);
     plan.targetEntryMs = !to.entryWindows.isEmpty() ? to.entryWindows.first().startMs : 0;
 
-    int bars = intent.preferredTransitionBars > 0 ? intent.preferredTransitionBars : 32;
-    if (!from.exitWindows.isEmpty() && from.exitWindows.first().bars > 0) {
-        bars = std::min(bars, from.exitWindows.first().bars);
+    int bars;
+    if (override.bars && *override.bars > 0) {
+        // Asked for explicitly: only physics gets to argue, not the heuristics.
+        // The window and the per-type caps are the planner's taste, and the DJ
+        // has just overruled it.
+        bars = *override.bars;
+        const int windowBars =
+                from.exitWindows.isEmpty() ? 0 : from.exitWindows.first().bars;
+        if (windowBars > 0 && bars > windowBars) {
+            overrideWarnings.append(
+                    QStringLiteral("%1 bars runs past the %2-bar exit window")
+                            .arg(bars)
+                            .arg(windowBars));
+        }
+    } else {
+        bars = intent.preferredTransitionBars > 0 ? intent.preferredTransitionBars : 32;
+        if (!from.exitWindows.isEmpty() && from.exitWindows.first().bars > 0) {
+            bars = std::min(bars, from.exitWindows.first().bars);
+        }
+        if (plan.type == TransitionType::CutOnPhrase) {
+            bars = std::min(bars, 8);
+        }
+        if (plan.type == TransitionType::AutoDjFallback) {
+            bars = std::min(bars, 16);
+        }
     }
-    if (plan.type == TransitionType::CutOnPhrase) {
-        bars = std::min(bars, 8);
-    }
-    if (plan.type == TransitionType::AutoDjFallback) {
-        bars = std::min(bars, 16);
+
+    // Physics, which nobody overrules: the transition cannot outlast the track
+    // it is leaving, or the source runs out mid-handover.
+    const double barMs = from.bpm > 0.0 ? 4.0 * 60000.0 / from.bpm : 2000.0;
+    const int availableBars =
+            static_cast<int>((from.durationMs - plan.sourceExitMs) / barMs);
+    if (availableBars > 0 && bars > availableBars) {
+        overrideWarnings.append(QStringLiteral("%1 bars does not fit before the track "
+                                               "ends; trimmed to %2")
+                                        .arg(bars)
+                                        .arg(availableBars));
+        bars = availableBars;
     }
     plan.durationBars = std::max(bars, 1);
     plan.durationBeats = plan.durationBars * 4.0;
@@ -210,6 +243,7 @@ TransitionPlan TransitionPlanner::plan(
                                .arg(QString::number(from.bpm, 'f', 1))
                                .arg(QString::number(plan.targetBpm, 'f', 1));
     plan.warnings = breakdown.penaltyReasons;
+    plan.warnings.append(overrideWarnings); // assigned above, so append after
     if (plan.type == TransitionType::AutoDjFallback) {
         plan.warnings.append(QStringLiteral("low confidence: falling back to Auto DJ style"));
     }

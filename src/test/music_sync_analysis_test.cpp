@@ -4,12 +4,17 @@
 #include <QTemporaryDir>
 
 #include "music_sync/analysis/analysis_repository.h"
+#include "music_sync/analysis/override_repository.h"
 #include "music_sync/domain/track_features.h"
 #include "music_sync/sidecar_database.h"
 
 namespace {
 
 using mixxx::music_sync::AnalysisRepository;
+using mixxx::music_sync::OverrideRepository;
+using mixxx::music_sync::PairKey;
+using mixxx::music_sync::TransitionOverride;
+using mixxx::music_sync::TransitionType;
 using mixxx::music_sync::SidecarDatabase;
 using mixxx::music_sync::TrackFeatures;
 
@@ -160,6 +165,95 @@ TEST(MusicSyncAnalysisRepositoryTest, ClearRemovesAllSnapshots) {
     // Clearing an empty sidecar is a no-op, not an error.
     EXPECT_EQ(repo.clear(), 0);
     EXPECT_EQ(repo.count(), 0);
+}
+
+TEST(MusicSyncOverrideRepositoryTest, RoundTripsAPairChoice) {
+    QTemporaryDir tempDir;
+    ASSERT_TRUE(tempDir.isValid());
+    SidecarDatabase db(tempDir.filePath(QStringLiteral("music-sync-dj.sqlite")));
+    ASSERT_TRUE(db.open());
+    ASSERT_TRUE(db.applyMigrations());
+    OverrideRepository repo(db.database());
+
+    PairKey key;
+    key.sourceTrackId = 10;
+    key.targetTrackId = 11;
+    TransitionOverride override;
+    override.type = TransitionType::BassSwap;
+    override.bars = 64;
+    ASSERT_TRUE(repo.save(key, override));
+
+    const auto loaded = repo.loadAll();
+    ASSERT_TRUE(loaded.contains(key));
+    EXPECT_EQ(*loaded.value(key).type, TransitionType::BassSwap);
+    EXPECT_EQ(*loaded.value(key).bars, 64);
+}
+
+TEST(MusicSyncOverrideRepositoryTest, EitherFieldAloneIsAValidChoice) {
+    // "Bass Swap, you pick the length" and "however you like, but 64 bars" are
+    // both real answers, so each field is independently optional.
+    QTemporaryDir tempDir;
+    ASSERT_TRUE(tempDir.isValid());
+    SidecarDatabase db(tempDir.filePath(QStringLiteral("music-sync-dj.sqlite")));
+    ASSERT_TRUE(db.open());
+    ASSERT_TRUE(db.applyMigrations());
+    OverrideRepository repo(db.database());
+
+    PairKey typeOnly{1, 2};
+    TransitionOverride a;
+    a.type = TransitionType::CutOnPhrase;
+    ASSERT_TRUE(repo.save(typeOnly, a));
+
+    PairKey barsOnly{3, 4};
+    TransitionOverride b;
+    b.bars = 16;
+    ASSERT_TRUE(repo.save(barsOnly, b));
+
+    const auto loaded = repo.loadAll();
+    EXPECT_TRUE(loaded.value(typeOnly).type.has_value());
+    EXPECT_FALSE(loaded.value(typeOnly).bars.has_value());
+    EXPECT_FALSE(loaded.value(barsOnly).type.has_value());
+    EXPECT_TRUE(loaded.value(barsOnly).bars.has_value());
+}
+
+TEST(MusicSyncOverrideRepositoryTest, BackToAutomaticRemovesTheChoice) {
+    // "Automatic" is the absence of a decision, not a decision to store.
+    QTemporaryDir tempDir;
+    ASSERT_TRUE(tempDir.isValid());
+    SidecarDatabase db(tempDir.filePath(QStringLiteral("music-sync-dj.sqlite")));
+    ASSERT_TRUE(db.open());
+    ASSERT_TRUE(db.applyMigrations());
+    OverrideRepository repo(db.database());
+
+    PairKey key{5, 6};
+    TransitionOverride override;
+    override.bars = 32;
+    ASSERT_TRUE(repo.save(key, override));
+    ASSERT_TRUE(repo.loadAll().contains(key));
+
+    ASSERT_TRUE(repo.save(key, TransitionOverride())); // back to automatic
+    EXPECT_FALSE(repo.loadAll().contains(key));
+}
+
+TEST(MusicSyncOverrideRepositoryTest, ChoicesFollowThePairNotThePosition) {
+    // The whole reason for keying by pair: reordering the set must not move a
+    // decision onto a different pair.
+    QTemporaryDir tempDir;
+    ASSERT_TRUE(tempDir.isValid());
+    SidecarDatabase db(tempDir.filePath(QStringLiteral("music-sync-dj.sqlite")));
+    ASSERT_TRUE(db.open());
+    ASSERT_TRUE(db.applyMigrations());
+    OverrideRepository repo(db.database());
+
+    PairKey forward{1, 2};
+    PairKey reversed{2, 1}; // the same tracks, the other way round: not the same
+    TransitionOverride override;
+    override.bars = 64;
+    ASSERT_TRUE(repo.save(forward, override));
+
+    const auto loaded = repo.loadAll();
+    EXPECT_TRUE(loaded.contains(forward));
+    EXPECT_FALSE(loaded.contains(reversed));
 }
 
 } // namespace

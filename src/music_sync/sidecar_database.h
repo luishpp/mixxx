@@ -15,7 +15,7 @@ namespace mixxx::music_sync {
 class SidecarDatabase {
   public:
     /// Latest schema version this build knows how to migrate to.
-    static constexpr int kTargetSchemaVersion = 6;
+    static constexpr int kTargetSchemaVersion = 7;
 
     explicit SidecarDatabase(QString filePath);
     ~SidecarDatabase();
@@ -64,6 +64,7 @@ class SidecarDatabase {
     bool migrateToV4();
     bool migrateToV5();
     bool migrateToV6();
+    bool migrateToV7();
 
     const QString m_connectionName;
     QString m_filePath;

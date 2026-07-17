@@ -8,6 +8,7 @@
 #include "analyzer/trackanalysisscheduler.h"
 #include "music_sync/domain/arrangement.h"
 #include "music_sync/domain/mix_intent.h"
+#include "music_sync/analysis/override_repository.h"
 #include "music_sync/domain/track_features.h"
 
 namespace mixxx {
@@ -103,6 +104,17 @@ class MusicSyncController : public QObject {
             const MixIntent& intent,
             int fromAct = 0,
             int toAct = 0);
+
+    // --- RF-010: per-pair transition editing ---
+
+    /// The DJ's stored choices, keyed by track pair.
+    QHash<PairKey, TransitionOverride> loadOverrides() const;
+
+    /// Pins the type and/or length for one pair. An empty override means "back
+    /// to automatic" and removes the stored choice.
+    bool setOverride(std::int64_t sourceTrackId,
+            std::int64_t targetTrackId,
+            const TransitionOverride& override);
 
     void pauseSet();
     void resumeSet();

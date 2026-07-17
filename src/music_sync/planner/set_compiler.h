@@ -7,6 +7,7 @@
 #include "music_sync/domain/arrangement.h"
 #include "music_sync/domain/mix_intent.h"
 #include "music_sync/domain/set_program.h"
+#include "music_sync/analysis/override_repository.h"
 #include "music_sync/domain/track_features.h"
 
 namespace mixxx::music_sync {
@@ -24,9 +25,13 @@ class SetCompiler {
     /// preview assume; a third would need the executor to track more state.
     static constexpr int kDeckCount = 2;
 
+    /// `overrides` carries the DJ's per-pair choices (RF-010); pairs absent from
+    /// it are planned automatically.
     static SetProgram compile(const Arrangement& arrangement,
             const QHash<std::int64_t, TrackFeatures>& byId,
-            const MixIntent& intent);
+            const MixIntent& intent,
+            const QHash<PairKey, TransitionOverride>& overrides =
+                    QHash<PairKey, TransitionOverride>());
 
     /// The arrangement restricted to acts [fromAct, toAct]; 0 on either bound
     /// means "unbounded", so (0, 0) returns it untouched.

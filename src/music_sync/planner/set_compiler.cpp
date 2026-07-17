@@ -35,7 +35,8 @@ Arrangement SetCompiler::scopeToActs(const Arrangement& arrangement,
 
 SetProgram SetCompiler::compile(const Arrangement& arrangement,
         const QHash<std::int64_t, TrackFeatures>& byId,
-        const MixIntent& intent) {
+        const MixIntent& intent,
+        const QHash<PairKey, TransitionOverride>& overrides) {
     SetProgram set;
     if (arrangement.items.isEmpty()) {
         return set;
@@ -60,8 +61,11 @@ SetProgram SetCompiler::compile(const Arrangement& arrangement,
     // Plan every transition first: each one decides where the outgoing track
     // hands over and where the incoming one comes in.
     for (int i = 0; i + 1 < ordered.size(); ++i) {
-        const TransitionPlan plan =
-                TransitionPlanner::plan(ordered.at(i), ordered.at(i + 1), intent);
+        PairKey key;
+        key.sourceTrackId = ordered.at(i).mixxxTrackId;
+        key.targetTrackId = ordered.at(i + 1).mixxxTrackId;
+        const TransitionPlan plan = TransitionPlanner::plan(
+                ordered.at(i), ordered.at(i + 1), intent, overrides.value(key));
         SetTransition transition;
         transition.fromPosition = i;
         transition.program = PreviewCompiler::compile(plan);

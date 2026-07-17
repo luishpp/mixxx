@@ -3,6 +3,7 @@
 #include <QString>
 #include <QVector>
 #include <cstdint>
+#include <optional>
 
 namespace mixxx::music_sync {
 
@@ -22,6 +23,21 @@ enum class TransitionType {
 };
 
 QString transitionTypeName(TransitionType type);
+
+/// The DJ's explicit choice for one pair, overriding what the planner would pick
+/// (spec RF-010: "alterar duração e tipo"). An unset field means "you decide".
+///
+/// Keyed by the PAIR of track ids, never by position: regenerating the sequence
+/// reorders positions, and an override pinned to a position would silently land
+/// on a different pair. This is what DJ.Studio's transition lock protects.
+struct TransitionOverride {
+    std::optional<TransitionType> type;
+    std::optional<int> bars;
+
+    bool isEmpty() const {
+        return !type.has_value() && !bars.has_value();
+    }
+};
 
 /// A control set to a value at a specific beat (instantaneous).
 struct ControlAction {

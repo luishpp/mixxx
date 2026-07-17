@@ -11,6 +11,7 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QStringList>
 #include <QTableWidget>
 #include <QTableWidgetItem>
@@ -407,6 +408,28 @@ void DlgMusicSync::slotGenerateSequence() {
     previewRow->addWidget(repeatButton);
     previewRow->addWidget(stopButton);
     layout->addLayout(previewRow);
+    // --- RF-010: pin the type and/or the length for this pair ---
+    auto* editRow = new QHBoxLayout();
+    editRow->addWidget(new QLabel(tr("Transition:"), &dialog));
+    auto* typeEdit = new QComboBox(&dialog);
+    typeEdit->addItem(tr("Automatic"), -1);
+    typeEdit->addItem(tr("Crossfade"), static_cast<int>(TransitionType::Crossfade));
+    typeEdit->addItem(tr("EQ Blend"), static_cast<int>(TransitionType::EqBlend));
+    typeEdit->addItem(tr("Bass Swap"), static_cast<int>(TransitionType::BassSwap));
+    typeEdit->addItem(tr("Breakdown swap"), static_cast<int>(TransitionType::BreakdownSwap));
+    typeEdit->addItem(tr("Filter"), static_cast<int>(TransitionType::FilterTransition));
+    typeEdit->addItem(tr("Cut on phrase"), static_cast<int>(TransitionType::CutOnPhrase));
+    editRow->addWidget(typeEdit);
+    editRow->addWidget(new QLabel(tr("Bars:"), &dialog));
+    auto* barsEdit = new QComboBox(&dialog);
+    barsEdit->addItem(tr("Automatic"), -1);
+    for (int bars : {8, 16, 32, 64}) {
+        barsEdit->addItem(QString::number(bars), bars);
+    }
+    editRow->addWidget(barsEdit);
+    editRow->addStretch(1);
+    layout->addLayout(editRow);
+
     auto* previewStatus = new QLabel(
             tr("Loads deck 1 = A and deck 2 = B, beat-matches and runs the transition."),
             &dialog);
@@ -417,6 +440,58 @@ void DlgMusicSync::slotGenerateSequence() {
     previewButton->setEnabled(canPreview);
     repeatButton->setEnabled(canPreview);
     stopButton->setEnabled(canPreview);
+
+    // The stored choice belongs to the PAIR, so selecting a pair loads its own.
+    const auto pairKeyAt = [&best](int i) {
+        PairKey key;
+        key.sourceTrackId = best.items.at(i).mixxxTrackId;
+        key.targetTrackId = best.items.at(i + 1).mixxxTrackId;
+        return key;
+    };
+    const auto showOverrideFor = [this, pairSelector, typeEdit, barsEdit, pairKeyAt, &best]() {
+        const int i = pairSelector->currentData().toInt();
+        if (i < 0 || i + 1 >= best.items.size()) {
+            return;
+        }
+        const TransitionOverride stored = m_pController->loadOverrides().value(pairKeyAt(i));
+        // setCurrentIndex fires currentIndexChanged, which would save right back
+        // over what we just read; block while syncing the widgets.
+        const QSignalBlocker blockType(typeEdit);
+        const QSignalBlocker blockBars(barsEdit);
+        typeEdit->setCurrentIndex(typeEdit->findData(
+                stored.type ? static_cast<int>(*stored.type) : -1));
+        barsEdit->setCurrentIndex(barsEdit->findData(stored.bars ? *stored.bars : -1));
+    };
+    const auto saveOverride = [this, pairSelector, typeEdit, barsEdit, pairKeyAt, &best]() {
+        const int i = pairSelector->currentData().toInt();
+        if (i < 0 || i + 1 >= best.items.size()) {
+            return;
+        }
+        TransitionOverride override;
+        const int type = typeEdit->currentData().toInt();
+        if (type >= 0) {
+            override.type = static_cast<TransitionType>(type);
+        }
+        const int bars = barsEdit->currentData().toInt();
+        if (bars > 0) {
+            override.bars = bars;
+        }
+        const PairKey key = pairKeyAt(i);
+        m_pController->setOverride(key.sourceTrackId, key.targetTrackId, override);
+    };
+    showOverrideFor();
+    connect(pairSelector,
+            QOverload<int>::of(&QComboBox::currentIndexChanged),
+            &dialog,
+            [showOverrideFor](int) { showOverrideFor(); });
+    connect(typeEdit,
+            QOverload<int>::of(&QComboBox::currentIndexChanged),
+            &dialog,
+            [saveOverride](int) { saveOverride(); });
+    connect(barsEdit,
+            QOverload<int>::of(&QComboBox::currentIndexChanged),
+            &dialog,
+            [saveOverride](int) { saveOverride(); });
 
     connect(previewButton,
             &QPushButton::clicked,

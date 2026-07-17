@@ -3969,6 +3969,8 @@ if(MUSIC_SYNC_ENABLED)
     src/music_sync/analysis/native_analysis_adapter.cpp
     src/music_sync/analysis/analysis_repository.h
     src/music_sync/analysis/analysis_repository.cpp
+    src/music_sync/analysis/override_repository.h
+    src/music_sync/analysis/override_repository.cpp
     src/music_sync/analysis/advanced_analysis_adapter.h
     src/music_sync/analysis/advanced_analysis_adapter.cpp
     src/music_sync/planner/harmonic_compatibility.h

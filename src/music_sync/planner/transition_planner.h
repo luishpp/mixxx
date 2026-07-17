@@ -20,9 +20,12 @@ class TransitionPlanner {
             const TrackFeatures& from, const TrackFeatures& to, double maxTempoChangePercent);
 
     /// Builds the full plan (positions, tempo/rate, automation, score,
-    /// explanation, warnings).
-    static TransitionPlan plan(
-            const TrackFeatures& from, const TrackFeatures& to, const MixIntent& intent);
+    /// explanation, warnings). `override` lets the DJ pin the type and/or the
+    /// length for this pair; whatever it leaves unset, the planner decides.
+    static TransitionPlan plan(const TrackFeatures& from,
+            const TrackFeatures& to,
+            const MixIntent& intent,
+            const TransitionOverride& override = TransitionOverride());
 };
 
 } // namespace mixxx::music_sync

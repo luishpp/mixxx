@@ -125,6 +125,9 @@ bool SidecarDatabase::applyMigrations() {
         case 6:
             ok = migrateToV6();
             break;
+        case 7:
+            ok = migrateToV7();
+            break;
         default:
             kLogger.warning() << "No migration defined for version" << version;
             ok = false;
@@ -240,6 +243,20 @@ bool SidecarDatabase::migrateToV4() {
         }
     }
     return true;
+}
+
+bool SidecarDatabase::migrateToV7() {
+    // The DJ's per-pair transition choices (RF-010). Keyed by the PAIR, never by
+    // position: regenerating the sequence reorders positions, and an override
+    // pinned to a position would silently land on a different pair.
+    return execStatement(m_database,
+            QStringLiteral("CREATE TABLE IF NOT EXISTS MusicSyncTransitionOverrides ("
+                           "  source_track_id INTEGER NOT NULL,"
+                           "  target_track_id INTEGER NOT NULL,"
+                           "  transition_type INTEGER,"   // NULL = planner decides
+                           "  bars INTEGER,"              // NULL = planner decides
+                           "  updated_at TEXT,"
+                           "  PRIMARY KEY (source_track_id, target_track_id))"));
 }
 
 bool SidecarDatabase::migrateToV6() {
