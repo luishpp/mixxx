@@ -488,11 +488,26 @@ void DlgMusicSync::slotGenerateSequence() {
     connect(stopSetButton, &QPushButton::clicked, &dialog, [this]() {
         m_pController->cancelSet();
     });
+    auto* setQueue = new QLabel(&dialog);
+    setQueue->setWordWrap(true);
+    layout->addWidget(setQueue);
+
     connect(m_pController,
             &MusicSyncController::setStateChanged,
             &dialog,
             [setStatus](int state, const QString& message) {
                 setStatus->setText(setStateText(state) + QStringLiteral(" — ") + message);
+            });
+    // RF-011: say which track is going onto a deck. The executor loads one deck
+    // ahead, so this fires for the track being cued, not the one playing.
+    connect(m_pController,
+            &MusicSyncController::setPositionChanged,
+            &dialog,
+            [setQueue, &best](int position, const QString& what) {
+                setQueue->setText(tr("Cued %1/%2 on the free deck: %3")
+                                          .arg(position + 1)
+                                          .arg(best.items.size())
+                                          .arg(what));
             });
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
