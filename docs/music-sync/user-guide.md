@@ -1,7 +1,7 @@
 # Guia do painel Music Sync DJ
 
 Como usar o módulo `mixxx::music_sync` na prática: o que cada controle faz, o que ele lê,
-o que ele grava e em que ordem usar. Descreve o comportamento **real** do código (Fase 6b).
+o que ele grava e em que ordem usar. Descreve o comportamento **real** do código (Fase 7).
 
 Abrir: **Opções → Music Sync**.
 
@@ -16,7 +16,8 @@ Numa biblioteca nova, use nesta ordem:
 2. **Read native analysis from library** — calcula tudo e grava no sidecar.
 3. Escolha o **preset de energia** (combo).
 4. **Generate sequence**.
-5. No diálogo: escolha um par → **Preview on decks**.
+5. No diálogo: escolha um par → **Preview on decks** para ouvir; ajuste **Transition/Bars** se
+   quiser; **Run set** para tocar o set (ou só um ato).
 
 > **Depois de atualizar o módulo (novo build), clique em "Read native analysis from library".**
 > As janelas/seções ficam **gravadas** no sidecar — "Reload snapshots" só relê o que está lá,
@@ -175,13 +176,52 @@ Por par consecutivo:
 | Tipo | Critério |
 |---|---|
 | **Auto DJ fallback** | faixa não analisada **ou sem janelas** → não dá para mixar de verdade |
-| **Cut on phrase** | tempo muito acima da tolerância **ou** tons incompatíveis |
+| **Breakdown swap** | tom incompatível **ou** salto de tempo — **e** a faixa que sai tem um `Breakdown`/`Outro` nos últimos 40% para pousar |
+| **Cut on phrase** | o mesmo caso, mas **sem** zona de pouso: não há o que esconder o choque |
 | **Bass Swap** | par dançante + harmônico + janelas confiáveis |
 | **EQ Blend** | janelas confiáveis |
 | **Crossfade** | o resto (modo seguro) |
 
+> **Por que Breakdown swap antes de Cut?** O §16 nunca pede corte para tom incompatível — pede
+> *"troca por breakdown"*: trazer a faixa nova atravessando um trecho de baixa energia, onde quase
+> não há conteúdo tonal para brigar. Cortes secos no Portal soam mal; foi assim que descobrimos.
+
 > **Tudo saindo "Auto DJ fallback"** = suas faixas estão sem **Exit @** (sem janelas) → sem energia
 > → sem waveform. Veja *Problemas comuns*.
+
+**Beat sync não segue o tipo, segue o plano.** Quem sabe se os tempos casam é o planejador: um
+*Breakdown swap* por choque de **tom** sincroniza (os tempos batem); o mesmo tipo por salto de
+**tempo** não sincroniza — cada faixa mantém o tempo dela. `Cut` e `Auto DJ fallback` nunca
+sincronizam.
+
+### Editar uma transição (RF-010)
+
+Ao lado do seletor de par:
+
+```
+Transition: [Automatic ▾]      Bars: [Automatic ▾]
+```
+
+- **Automatic** (padrão) — o motor escolhe e explica, como sempre.
+- Escolha um **tipo** e/ou um **número de compassos** (8/16/32/64) para **aquele par**. Os dois são
+  independentes: *"Bass Swap, você escolhe o tamanho"* e *"como quiser, mas 64 compassos"* são
+  respostas válidas.
+
+**A sua escolha de duração vence as heurísticas.** O limite da janela e o teto de 8 compassos do
+Cut são *gosto do planejador* — você acaba de passar por cima. **Só a física ainda discute**: se a
+transição não couber antes da faixa acabar, ela é aparada e o relatório **avisa**. Sair da janela
+também é permitido, com aviso. Nada acontece calado.
+
+> **A escolha fica colada no _par de faixas_, não na posição** (sidecar, migration v7). Rodar
+> *Generate sequence* de novo reordena posições — um ajuste preso à "posição 7" reapareceria em
+> cima de **outro par**. Por isso *Automatic* é a **ausência** de registro: não decidir não é uma
+> decisão.
+
+**Preview on decks**, **Run set** e o relatório planejam pelos **mesmos** overrides — o que você
+ouve na prévia é o que o set vai fazer. Ajuste → ouça → repita.
+
+> Não existe (ainda): timeline arrastável, desenho de curva à mão, stems e presets combináveis.
+> O §27 do plano põe isso na **Fase 10 (pós-MVP)**.
 
 ### Preview em dois decks
 
@@ -233,6 +273,16 @@ A faixa não tem **waveform** armazenado. Analise-a pela biblioteca do Mixxx (cl
 **Transições não mudaram depois de atualizar o módulo**
 Você clicou em *Reload snapshots* (que só relê o gravado). Clique em
 **Read native analysis from library** para recalcular.
+
+**Ajustei uma transição e ela voltou ao automático**
+O ajuste é gravado por **par de faixas**. Se o par deixou de existir na sequência (você reordenou
+e aquelas duas faixas não são mais vizinhas), o ajuste continua salvo, mas não se aplica a nada —
+ele volta a valer se o par voltar a existir. Se você quis mesmo desfazer, escolha **Automatic**.
+
+**Forcei 64 compassos e saiu menos**
+A transição não cabia antes da faixa que sai terminar. O relatório mostra o aviso
+`… does not fit before the track ends; trimmed to N`. Escolha um número menor ou uma faixa com
+mais cauda depois do `Exit @`.
 
 **Mudei/limpei a biblioteca, mas o Generate sequence mostra as faixas antigas**
 Os snapshots vivem no **sidecar**, não na biblioteca — limpar a biblioteca do Mixxx não mexe
