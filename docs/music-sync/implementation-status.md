@@ -123,6 +123,13 @@ O log dizia "5 faixas, 4 transições, tudo verde". O ouvido discordou, e estava
 - **Fase 8** — Gravação e relatórios (WAV master via Mixxx, tracklist, session-report). **→ set de 35 faixas executável e gravável.**
 - **Fase 9–10** — Worker Python opcional; Echo Out/loop-out; stems; LLM de intenção; render offline.
 
+## Decisões deliberadas (não são lacunas)
+- **Sem seleção por duração-alvo.** `generateSequences` usa **todas** as faixas analisadas; o
+  `MixIntent::targetDurationMs` existe e **não é lido**. O §18 sugere três versões (90 min ≈ 17
+  faixas, 2h ≈ 25, 2h30–3h ≈ tudo) e o §9 fala em ~6 âncoras longas por apresentação — mas
+  **decisão do usuário (2026-07-13): o plano é orientação, não lei**. O set atual (37 faixas,
+  ~1h41) é o desejado. O motor propõe e explica; quem corta faixa é o DJ. Não reabrir como bug.
+
 ## Limitações conhecidas
 - Gravação é em tempo real (set de 90 min = 90 min); render offline fica para pós-MVP.
 - Detecção de vocais/seções é heurística no MVP (worker Python melhora depois).
