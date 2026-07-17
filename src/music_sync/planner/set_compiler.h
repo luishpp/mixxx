@@ -31,7 +31,9 @@ class SetCompiler {
             const QHash<std::int64_t, TrackFeatures>& byId,
             const MixIntent& intent,
             const QHash<PairKey, TransitionOverride>& overrides =
-                    QHash<PairKey, TransitionOverride>());
+                    QHash<PairKey, TransitionOverride>(),
+            const QHash<int, TransitionOverride>& actRules =
+                    QHash<int, TransitionOverride>());
 
     /// The arrangement restricted to acts [fromAct, toAct]; 0 on either bound
     /// means "unbounded", so (0, 0) returns it untouched.

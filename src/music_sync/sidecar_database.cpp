@@ -128,6 +128,9 @@ bool SidecarDatabase::applyMigrations() {
         case 7:
             ok = migrateToV7();
             break;
+        case 8:
+            ok = migrateToV8();
+            break;
         default:
             kLogger.warning() << "No migration defined for version" << version;
             ok = false;
@@ -237,6 +240,27 @@ bool SidecarDatabase::migrateToV4() {
                                 "ADD COLUMN entry_windows TEXT"),
                  QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
                                 "ADD COLUMN exit_windows TEXT"),
+         }) {
+        if (!execStatement(m_database, statement)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool SidecarDatabase::migrateToV8() {
+    // Act-wide defaults (spec 16 thinks in blocks: long blends in the melodic
+    // acts, fast ones in the flashes and the peak). A pair-level override still
+    // beats these; this is the rule, not the exception.
+    for (const QString& statement : {
+                 QStringLiteral("CREATE TABLE IF NOT EXISTS MusicSyncActOverrides ("
+                                "  act INTEGER PRIMARY KEY,"
+                                "  transition_type INTEGER,"
+                                "  bars INTEGER,"
+                                "  updated_at TEXT)"),
+                 // The exit is per track, so it has no place in an act-wide rule.
+                 QStringLiteral("ALTER TABLE MusicSyncTransitionOverrides "
+                                "ADD COLUMN source_exit_ms INTEGER"),
          }) {
         if (!execStatement(m_database, statement)) {
             return false;

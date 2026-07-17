@@ -159,9 +159,14 @@ TransitionPlan TransitionPlanner::plan(const TrackFeatures& from,
     plan.type = override.type ? *override.type : chooseType(from, to, maxTempoPct);
     QVector<QString> overrideWarnings;
 
-    plan.sourceExitMs = !from.exitWindows.isEmpty()
-            ? from.exitWindows.first().startMs
-            : std::max<std::int64_t>(0, from.durationMs - 60000);
+    // The DJ's handover point wins; otherwise the best exit window, or a
+    // guess a minute from the end when there is no window at all.
+    plan.sourceExitMs = override.sourceExitMs
+            ? *override.sourceExitMs
+            : (!from.exitWindows.isEmpty()
+                              ? from.exitWindows.first().startMs
+                              : std::max<std::int64_t>(0, from.durationMs - 60000));
+    plan.sourceExitMs = std::clamp<std::int64_t>(plan.sourceExitMs, 0, from.durationMs);
     plan.targetEntryMs = !to.entryWindows.isEmpty() ? to.entryWindows.first().startMs : 0;
 
     int bars;

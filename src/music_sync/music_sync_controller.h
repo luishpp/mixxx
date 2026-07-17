@@ -110,6 +110,15 @@ class MusicSyncController : public QObject {
     /// The DJ's stored choices, keyed by track pair.
     QHash<PairKey, TransitionOverride> loadOverrides() const;
 
+    /// Act-wide defaults; a pair's own choice beats them.
+    QHash<int, TransitionOverride> loadActRules() const;
+    bool setActRule(int act, const TransitionOverride& rule);
+
+    /// What actually applies to a pair, pair over act — the same resolution the
+    /// preview and the set use, so the panel never shows a different answer.
+    TransitionOverride resolvedOverride(
+            std::int64_t sourceTrackId, std::int64_t targetTrackId, int act) const;
+
     /// Pins the type and/or length for one pair. An empty override means "back
     /// to automatic" and removes the stored choice.
     bool setOverride(std::int64_t sourceTrackId,

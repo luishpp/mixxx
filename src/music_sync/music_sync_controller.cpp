@@ -354,8 +354,8 @@ bool MusicSyncController::previewTransition(
     key.sourceTrackId = from.mixxxTrackId;
     key.targetTrackId = to.mixxxTrackId;
     // Preview what the set will actually do, including the DJ's own choice.
-    const TransitionPlan plan =
-            TransitionPlanner::plan(from, to, intent, loadOverrides().value(key));
+    const TransitionPlan plan = TransitionPlanner::plan(
+            from, to, intent, resolvedOverride(from.mixxxTrackId, to.mixxxTrackId, from.act));
     const PreviewProgram program = PreviewCompiler::compile(plan);
 
     if (!m_pPreviewExecutor) {
@@ -416,7 +416,7 @@ bool MusicSyncController::runSet(const Arrangement& arrangement,
         return false;
     }
     const SetProgram program =
-            SetCompiler::compile(scoped, byId, intent, loadOverrides());
+            SetCompiler::compile(scoped, byId, intent, loadOverrides(), loadActRules());
     if (program.items.isEmpty()) {
         return false;
     }
@@ -456,6 +456,28 @@ QHash<PairKey, TransitionOverride> MusicSyncController::loadOverrides() const {
         return {};
     }
     return OverrideRepository(m_pDatabase->database()).loadAll();
+}
+
+QHash<int, TransitionOverride> MusicSyncController::loadActRules() const {
+    if (!m_pDatabase) {
+        return {};
+    }
+    return OverrideRepository(m_pDatabase->database()).loadActRules();
+}
+
+bool MusicSyncController::setActRule(int act, const TransitionOverride& rule) {
+    if (!m_pDatabase) {
+        return false;
+    }
+    return OverrideRepository(m_pDatabase->database()).saveActRule(act, rule);
+}
+
+TransitionOverride MusicSyncController::resolvedOverride(
+        std::int64_t sourceTrackId, std::int64_t targetTrackId, int act) const {
+    PairKey key;
+    key.sourceTrackId = sourceTrackId;
+    key.targetTrackId = targetTrackId;
+    return OverrideRepository::resolve(loadOverrides(), loadActRules(), key, act);
 }
 
 bool MusicSyncController::setOverride(std::int64_t sourceTrackId,

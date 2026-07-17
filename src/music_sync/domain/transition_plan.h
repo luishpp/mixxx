@@ -33,9 +33,31 @@ QString transitionTypeName(TransitionType type);
 struct TransitionOverride {
     std::optional<TransitionType> type;
     std::optional<int> bars;
+    /// Where the outgoing track hands over, in ms. This is also how a track's
+    /// play time is shortened: in a linear set each track is the source of
+    /// exactly one transition, so its handover point IS that transition's exit.
+    /// Spec 9 needs this — "flashes nostálgicos: faixas para 90 segundos a 3
+    /// minutos" is unreachable while the exit is whatever the analysis found.
+    std::optional<std::int64_t> sourceExitMs;
 
     bool isEmpty() const {
-        return !type.has_value() && !bars.has_value();
+        return !type.has_value() && !bars.has_value() && !sourceExitMs.has_value();
+    }
+
+    /// The fields this override actually decides, layered over `base`. Used to
+    /// resolve pair-over-act: a pair says only what it disagrees about.
+    TransitionOverride layeredOver(const TransitionOverride& base) const {
+        TransitionOverride out = base;
+        if (type) {
+            out.type = type;
+        }
+        if (bars) {
+            out.bars = bars;
+        }
+        if (sourceExitMs) {
+            out.sourceExitMs = sourceExitMs;
+        }
+        return out;
     }
 };
 

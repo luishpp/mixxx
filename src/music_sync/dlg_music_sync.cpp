@@ -8,6 +8,7 @@
 #include <QHash>
 #include <QHeaderView>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -17,8 +18,10 @@
 #include <QTableWidgetItem>
 #include <QVBoxLayout>
 #include <cmath>
+#include <optional>
 
 #include "coreservices.h"
+#include "music_sync/analysis/override_repository.h"
 #include "music_sync/domain/arrangement.h"
 #include "music_sync/domain/mix_intent.h"
 #include "music_sync/domain/transition_plan.h"
@@ -40,6 +43,26 @@ QString msToClock(std::int64_t ms) {
     return QStringLiteral("%1:%2")
             .arg(totalSeconds / 60)
             .arg(totalSeconds % 60, 2, 10, QChar('0'));
+}
+
+/// "3:04" -> 184000 ms. Empty or unparseable means "no choice", which is how the
+/// field says "let the analysis decide" rather than "position zero".
+std::optional<std::int64_t> clockToMs(const QString& text) {
+    const QString trimmed = text.trimmed();
+    if (trimmed.isEmpty()) {
+        return std::nullopt;
+    }
+    const QStringList parts = trimmed.split(QChar(':'));
+    bool okMinutes = false;
+    bool okSeconds = false;
+    if (parts.size() == 2) {
+        const int minutes = parts.at(0).toInt(&okMinutes);
+        const int seconds = parts.at(1).toInt(&okSeconds);
+        if (okMinutes && okSeconds && minutes >= 0 && seconds >= 0 && seconds < 60) {
+            return static_cast<std::int64_t>(minutes) * 60000 + seconds * 1000;
+        }
+    }
+    return std::nullopt;
 }
 
 QString replayGainText(double ratio) {
@@ -335,82 +358,96 @@ void DlgMusicSync::slotGenerateSequence() {
     }
 
     const Arrangement& best = arrangements.first();
-    QString report =
-            tr("Best of %1 alternative(s) — average compatibility %2%, energy fit %3%\n\n")
+    const QString header =
+            tr("Best of %1 alternative(s) — average compatibility %2%, energy fit %3%%4")
                     .arg(arrangements.size())
                     .arg(qRound(best.totalScore * 100.0))
-                    .arg(qRound(best.energyFitScore * 100.0));
-    TrackFeatures prevFeatures;
-    bool havePrev = false;
-    for (const ArrangementItem& item : best.items) {
-        const TrackFeatures features = byId.value(item.mixxxTrackId);
-        report += QStringLiteral("%1. %2 - %3  (%4 BPM, %5)%6\n")
-                          .arg(item.position + 1, 2)
-                          .arg(features.artist.isEmpty() ? QStringLiteral("?") : features.artist,
-                                  features.title.isEmpty() ? QStringLiteral("?") : features.title,
-                                  features.bpm > 0.0 ? QString::number(features.bpm, 'f', 1)
-                                                     : QStringLiteral("—"),
-                                  features.camelot.isEmpty() ? QStringLiteral("—")
-                                                             : features.camelot,
-                                  item.locked ? tr("  [locked]") : QString());
-        if (item.position > 0) {
-            report += QStringLiteral("      [%1%] %2\n")
-                              .arg(qRound(item.pairScoreFromPrevious * 100.0))
-                              .arg(item.explanationFromPrevious);
-            if (havePrev) {
-                const TransitionPlan plan =
-                        TransitionPlanner::plan(prevFeatures, features, intent);
-                report += QStringLiteral("      ↳ %1 — %2 bars, %3% conf\n")
-                                  .arg(transitionTypeName(plan.type))
-                                  .arg(plan.durationBars)
-                                  .arg(qRound(plan.confidence * 100.0));
-            }
-        }
-        prevFeatures = features;
-        havePrev = true;
-    }
-    if (!best.warnings.isEmpty()) {
-        report += QStringLiteral("\n") + tr("Warnings: ") +
-                best.warnings.join(QStringLiteral("; "));
-    }
+                    .arg(qRound(best.energyFitScore * 100.0))
+                    .arg(best.warnings.isEmpty()
+                                    ? QString()
+                                    : QStringLiteral("  —  ") +
+                                            best.warnings.join(QStringLiteral("; ")));
 
     QDialog dialog(this);
     dialog.setWindowTitle(tr("Generated sequence"));
-    dialog.resize(760, 620);
+    dialog.resize(1180, 700);
     auto* layout = new QVBoxLayout(&dialog);
-    auto* view = new QPlainTextEdit(&dialog);
-    view->setReadOnly(true);
-    view->setPlainText(report);
-    layout->addWidget(view);
+    layout->addWidget(new QLabel(header, &dialog));
 
-    // --- Fase 6: two-deck preview of a chosen consecutive pair ---
-    auto* previewRow = new QHBoxLayout();
-    auto* pairSelector = new QComboBox(&dialog);
-    // Listed in set order (ascending position), which is the narrative order:
-    // the optimizer keeps the acts in sequence, so pair 1 is the opening
-    // transition and the last one closes the set. This also matches the
-    // numbered report above.
-    for (int i = 0; i + 1 < best.items.size(); ++i) {
-        const TrackFeatures a = byId.value(best.items.at(i).mixxxTrackId);
-        const TrackFeatures b = byId.value(best.items.at(i + 1).mixxxTrackId);
-        pairSelector->addItem(
-                QStringLiteral("%1. %2 → %3")
-                        .arg(i + 1, 2, 10, QChar('0'))
-                        .arg(a.title.isEmpty() ? dashIfEmpty(a.artist) : a.title,
-                                b.title.isEmpty() ? dashIfEmpty(b.artist) : b.title),
-                i);
-    }
-    auto* previewButton = new QPushButton(tr("Preview on decks"), &dialog);
-    auto* repeatButton = new QPushButton(tr("Repeat"), &dialog);
-    auto* stopButton = new QPushButton(tr("Cancel preview"), &dialog);
-    previewRow->addWidget(pairSelector, 1);
-    previewRow->addWidget(previewButton);
-    previewRow->addWidget(repeatButton);
-    previewRow->addWidget(stopButton);
-    layout->addLayout(previewRow);
-    // --- RF-010: pin the type and/or the length for this pair ---
+    // One row per track: what plays, where it hands over, and how. Editing lives
+    // in the row it belongs to instead of in a combo you have to hunt for.
+    auto* grid = new QTableWidget(&dialog);
+    grid->setColumnCount(8);
+    grid->setHorizontalHeaderLabels(QStringList()
+            << tr("#") << tr("Act") << tr("Track") << tr("Exit @")
+            << tr("Transition") << tr("Bars") << tr("Match") << tr("Plan"));
+    grid->setRowCount(best.items.size());
+    grid->setSelectionBehavior(QAbstractItemView::SelectRows);
+    grid->verticalHeader()->setVisible(false);
+    grid->horizontalHeader()->setStretchLastSection(true);
+    layout->addWidget(grid, 1);
+
+    const auto rebuildGrid = [this, grid, &best, &byId, intent]() {
+        const QHash<int, TransitionOverride> actRules = m_pController->loadActRules();
+        const QHash<PairKey, TransitionOverride> pairs = m_pController->loadOverrides();
+        for (int i = 0; i < best.items.size(); ++i) {
+            const TrackFeatures a = byId.value(best.items.at(i).mixxxTrackId);
+            const auto setCell = [&](int column, const QString& text) {
+                auto* item = new QTableWidgetItem(text);
+                item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+                grid->setItem(i, column, item);
+            };
+            setCell(0, QString::number(i + 1));
+            setCell(1, a.act > 0 ? QString::number(a.act) : QStringLiteral("—"));
+            setCell(2,
+                    QStringLiteral("%1 - %2%3")
+                            .arg(dashIfEmpty(a.artist),
+                                    a.title.isEmpty() ? dashIfEmpty(a.artist) : a.title,
+                                    best.items.at(i).locked ? tr("  [locked]") : QString()));
+            if (i + 1 >= best.items.size()) {
+                // The closer hands over to nobody: nothing here to plan or edit.
+                for (int column = 3; column < 8; ++column) {
+                    setCell(column, QStringLiteral("—"));
+                }
+                continue;
+            }
+            const TrackFeatures b = byId.value(best.items.at(i + 1).mixxxTrackId);
+            PairKey key;
+            key.sourceTrackId = a.mixxxTrackId;
+            key.targetTrackId = b.mixxxTrackId;
+            const TransitionOverride resolved =
+                    OverrideRepository::resolve(pairs, actRules, key, a.act);
+            const TransitionPlan plan = TransitionPlanner::plan(a, b, intent, resolved);
+
+            setCell(3, msToClock(plan.sourceExitMs));
+            // Say where each value came from, so "why is this a Cut?" is answerable
+            // without reading the source.
+            const auto origin = [&](bool fromPair, bool fromAct) {
+                return fromPair ? tr(" (pair)") : (fromAct ? tr(" (act)") : QString());
+            };
+            setCell(4,
+                    transitionTypeName(plan.type) +
+                            origin(pairs.value(key).type.has_value(),
+                                    actRules.value(a.act).type.has_value()));
+            setCell(5,
+                    QString::number(plan.durationBars) +
+                            origin(pairs.value(key).bars.has_value(),
+                                    actRules.value(a.act).bars.has_value()));
+            setCell(6, QStringLiteral("%1%").arg(qRound(
+                               best.items.at(i + 1).pairScoreFromPrevious * 100.0)));
+            setCell(7,
+                    plan.warnings.isEmpty()
+                            ? best.items.at(i + 1).explanationFromPrevious
+                            : plan.warnings.join(QStringLiteral("; ")));
+        }
+        grid->resizeColumnsToContents();
+    };
+    rebuildGrid();
+
+    // Editing acts on the selected row, so the thing you change is the thing you
+    // are looking at (RF-010).
     auto* editRow = new QHBoxLayout();
-    editRow->addWidget(new QLabel(tr("Transition:"), &dialog));
+    editRow->addWidget(new QLabel(tr("Selected transition:"), &dialog));
     auto* typeEdit = new QComboBox(&dialog);
     typeEdit->addItem(tr("Automatic"), -1);
     typeEdit->addItem(tr("Crossfade"), static_cast<int>(TransitionType::Crossfade));
@@ -427,86 +464,150 @@ void DlgMusicSync::slotGenerateSequence() {
         barsEdit->addItem(QString::number(bars), bars);
     }
     editRow->addWidget(barsEdit);
+    editRow->addWidget(new QLabel(tr("Exit @:"), &dialog));
+    auto* exitEdit = new QLineEdit(&dialog);
+    exitEdit->setMaximumWidth(70);
+    exitEdit->setPlaceholderText(tr("auto"));
+    exitEdit->setToolTip(tr("mm:ss — where this track hands over. Empty = the analysis "
+                            "decides. This is how a flash is kept to 90 s (spec 9)."));
+    editRow->addWidget(exitEdit);
+    auto* previewButton = new QPushButton(tr("Preview on decks"), &dialog);
+    auto* repeatButton = new QPushButton(tr("Repeat"), &dialog);
+    auto* stopButton = new QPushButton(tr("Cancel preview"), &dialog);
+    editRow->addWidget(previewButton);
+    editRow->addWidget(repeatButton);
+    editRow->addWidget(stopButton);
     editRow->addStretch(1);
     layout->addLayout(editRow);
 
+    // Act-wide rule: spec 16 thinks in blocks ("long blends in the melodic acts,
+    // fast ones in the flashes"), so setting 36 pairs by hand is the wrong tool.
+    auto* actRow = new QHBoxLayout();
+    actRow->addWidget(new QLabel(tr("Rule for act:"), &dialog));
+    auto* actPick = new QComboBox(&dialog);
+    for (int act = 1; act <= 7; ++act) {
+        actPick->addItem(tr("Act %1").arg(act), act);
+    }
+    actRow->addWidget(actPick);
+    auto* actType = new QComboBox(&dialog);
+    auto* actBars = new QComboBox(&dialog);
+    for (int i = 0; i < typeEdit->count(); ++i) {
+        actType->addItem(typeEdit->itemText(i), typeEdit->itemData(i));
+    }
+    for (int i = 0; i < barsEdit->count(); ++i) {
+        actBars->addItem(barsEdit->itemText(i), barsEdit->itemData(i));
+    }
+    actRow->addWidget(actType);
+    actRow->addWidget(new QLabel(tr("Bars:"), &dialog));
+    actRow->addWidget(actBars);
+    auto* applyAct = new QPushButton(tr("Apply to act"), &dialog);
+    actRow->addWidget(applyAct);
+    actRow->addStretch(1);
+    layout->addLayout(actRow);
+
     auto* previewStatus = new QLabel(
-            tr("Loads deck 1 = A and deck 2 = B, beat-matches and runs the transition."),
-            &dialog);
+            tr("A pair's own choice beats its act's rule; both beat automatic."), &dialog);
     previewStatus->setWordWrap(true);
     layout->addWidget(previewStatus);
 
-    const bool canPreview = pairSelector->count() > 0;
-    previewButton->setEnabled(canPreview);
-    repeatButton->setEnabled(canPreview);
-    stopButton->setEnabled(canPreview);
-
-    // The stored choice belongs to the PAIR, so selecting a pair loads its own.
+    const auto selectedRow = [grid, &best]() {
+        const int row = grid->currentRow();
+        return (row >= 0 && row + 1 < best.items.size()) ? row : -1;
+    };
     const auto pairKeyAt = [&best](int i) {
         PairKey key;
         key.sourceTrackId = best.items.at(i).mixxxTrackId;
         key.targetTrackId = best.items.at(i + 1).mixxxTrackId;
         return key;
     };
-    const auto showOverrideFor = [this, pairSelector, typeEdit, barsEdit, pairKeyAt, &best]() {
-        const int i = pairSelector->currentData().toInt();
-        if (i < 0 || i + 1 >= best.items.size()) {
+    const auto showSelection = [this, selectedRow, pairKeyAt, typeEdit, barsEdit, exitEdit]() {
+        const int row = selectedRow();
+        // setCurrentIndex fires currentIndexChanged, which would save straight
+        // back over what we just read; block while syncing the widgets.
+        const QSignalBlocker b1(typeEdit);
+        const QSignalBlocker b2(barsEdit);
+        const QSignalBlocker b3(exitEdit);
+        const bool editable = row >= 0;
+        typeEdit->setEnabled(editable);
+        barsEdit->setEnabled(editable);
+        exitEdit->setEnabled(editable);
+        if (!editable) {
             return;
         }
-        const TransitionOverride stored = m_pController->loadOverrides().value(pairKeyAt(i));
-        // setCurrentIndex fires currentIndexChanged, which would save right back
-        // over what we just read; block while syncing the widgets.
-        const QSignalBlocker blockType(typeEdit);
-        const QSignalBlocker blockBars(barsEdit);
-        typeEdit->setCurrentIndex(typeEdit->findData(
-                stored.type ? static_cast<int>(*stored.type) : -1));
-        barsEdit->setCurrentIndex(barsEdit->findData(stored.bars ? *stored.bars : -1));
+        // Only the pair's OWN choice is shown: its act's rule is context, not
+        // something you would be editing from this row.
+        const TransitionOverride own = m_pController->loadOverrides().value(pairKeyAt(row));
+        typeEdit->setCurrentIndex(
+                typeEdit->findData(own.type ? static_cast<int>(*own.type) : -1));
+        barsEdit->setCurrentIndex(barsEdit->findData(own.bars ? *own.bars : -1));
+        exitEdit->setText(own.sourceExitMs ? msToClock(*own.sourceExitMs) : QString());
     };
-    const auto saveOverride = [this, pairSelector, typeEdit, barsEdit, pairKeyAt, &best]() {
-        const int i = pairSelector->currentData().toInt();
-        if (i < 0 || i + 1 >= best.items.size()) {
-            return;
-        }
-        TransitionOverride override;
-        const int type = typeEdit->currentData().toInt();
-        if (type >= 0) {
-            override.type = static_cast<TransitionType>(type);
-        }
-        const int bars = barsEdit->currentData().toInt();
-        if (bars > 0) {
-            override.bars = bars;
-        }
-        const PairKey key = pairKeyAt(i);
-        m_pController->setOverride(key.sourceTrackId, key.targetTrackId, override);
-    };
-    showOverrideFor();
-    connect(pairSelector,
-            QOverload<int>::of(&QComboBox::currentIndexChanged),
-            &dialog,
-            [showOverrideFor](int) { showOverrideFor(); });
+    const auto saveSelection =
+            [this, selectedRow, pairKeyAt, typeEdit, barsEdit, exitEdit, rebuildGrid]() {
+                const int row = selectedRow();
+                if (row < 0) {
+                    return;
+                }
+                TransitionOverride override;
+                if (typeEdit->currentData().toInt() >= 0) {
+                    override.type = static_cast<TransitionType>(typeEdit->currentData().toInt());
+                }
+                if (barsEdit->currentData().toInt() > 0) {
+                    override.bars = barsEdit->currentData().toInt();
+                }
+                override.sourceExitMs = clockToMs(exitEdit->text());
+                const PairKey key = pairKeyAt(row);
+                m_pController->setOverride(key.sourceTrackId, key.targetTrackId, override);
+                rebuildGrid();
+            };
+    connect(grid, &QTableWidget::itemSelectionChanged, &dialog, [showSelection]() {
+        showSelection();
+    });
     connect(typeEdit,
             QOverload<int>::of(&QComboBox::currentIndexChanged),
             &dialog,
-            [saveOverride](int) { saveOverride(); });
+            [saveSelection](int) { saveSelection(); });
     connect(barsEdit,
             QOverload<int>::of(&QComboBox::currentIndexChanged),
             &dialog,
-            [saveOverride](int) { saveOverride(); });
-
+            [saveSelection](int) { saveSelection(); });
+    connect(exitEdit, &QLineEdit::editingFinished, &dialog, [saveSelection]() {
+        saveSelection();
+    });
+    connect(applyAct,
+            &QPushButton::clicked,
+            &dialog,
+            [this, actPick, actType, actBars, rebuildGrid, previewStatus]() {
+                TransitionOverride rule;
+                if (actType->currentData().toInt() >= 0) {
+                    rule.type = static_cast<TransitionType>(actType->currentData().toInt());
+                }
+                if (actBars->currentData().toInt() > 0) {
+                    rule.bars = actBars->currentData().toInt();
+                }
+                const int act = actPick->currentData().toInt();
+                m_pController->setActRule(act, rule);
+                rebuildGrid();
+                previewStatus->setText(rule.isEmpty()
+                                ? tr("Act %1 back to automatic.").arg(act)
+                                : tr("Act %1 rule applied — pairs with their own "
+                                     "choice keep it.")
+                                          .arg(act));
+            });
     connect(previewButton,
             &QPushButton::clicked,
             &dialog,
-            [this, pairSelector, &best, &byId, intent, previewStatus]() {
-                const int i = pairSelector->currentData().toInt();
-                if (i < 0 || i + 1 >= best.items.size()) {
+            [this, selectedRow, &best, &byId, intent, previewStatus]() {
+                const int row = selectedRow();
+                if (row < 0) {
+                    previewStatus->setText(tr("Select a transition row first."));
                     return;
                 }
-                const TrackFeatures from = byId.value(best.items.at(i).mixxxTrackId);
-                const TrackFeatures to = byId.value(best.items.at(i + 1).mixxxTrackId);
+                const TrackFeatures from = byId.value(best.items.at(row).mixxxTrackId);
+                const TrackFeatures to = byId.value(best.items.at(row + 1).mixxxTrackId);
                 if (!m_pController->previewTransition(from, to, intent)) {
-                    previewStatus->setText(tr(
-                            "Preview unavailable — need at least two decks and both "
-                            "tracks in the library."));
+                    previewStatus->setText(tr("Preview unavailable — need two decks and "
+                                              "both tracks in the library."));
                 }
             });
     connect(repeatButton, &QPushButton::clicked, &dialog, [this]() {
@@ -519,9 +620,10 @@ void DlgMusicSync::slotGenerateSequence() {
             &MusicSyncController::previewStateChanged,
             &dialog,
             [previewStatus](int state, const QString& message) {
-                previewStatus->setText(
-                        previewStateText(state) + QStringLiteral(" — ") + message);
+                previewStatus->setText(previewStateText(state) + QStringLiteral(" — ") + message);
             });
+    grid->selectRow(0);
+    showSelection();
 
     // --- Fase 7: run the whole set ---
     auto* setRow = new QHBoxLayout();

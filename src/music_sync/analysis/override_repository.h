@@ -45,6 +45,22 @@ class OverrideRepository {
     /// Forgets every choice. Returns how many were removed, or -1 on failure.
     int clear();
 
+    // --- Act-wide rules (spec 16 thinks in blocks) ---
+
+    /// Defaults per act (1..7). A pair's own choice beats these.
+    QHash<int, TransitionOverride> loadActRules() const;
+
+    /// Sets the rule for one act; an empty rule removes it.
+    bool saveActRule(int act, const TransitionOverride& rule);
+
+    /// What actually applies to a pair: its own choice layered over its act's
+    /// rule. Precedence is pair > act > automatic, and it lives here so the
+    /// panel, the preview and the set executor cannot each invent their own.
+    static TransitionOverride resolve(const QHash<PairKey, TransitionOverride>& pairs,
+            const QHash<int, TransitionOverride>& acts,
+            const PairKey& key,
+            int act);
+
   private:
     QSqlDatabase m_database;
 };

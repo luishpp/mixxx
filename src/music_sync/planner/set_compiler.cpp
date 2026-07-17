@@ -1,5 +1,6 @@
 #include "music_sync/planner/set_compiler.h"
 
+#include "music_sync/analysis/override_repository.h"
 #include "music_sync/planner/preview_compiler.h"
 #include "music_sync/planner/transition_planner.h"
 
@@ -36,7 +37,8 @@ Arrangement SetCompiler::scopeToActs(const Arrangement& arrangement,
 SetProgram SetCompiler::compile(const Arrangement& arrangement,
         const QHash<std::int64_t, TrackFeatures>& byId,
         const MixIntent& intent,
-        const QHash<PairKey, TransitionOverride>& overrides) {
+        const QHash<PairKey, TransitionOverride>& overrides,
+        const QHash<int, TransitionOverride>& actRules) {
     SetProgram set;
     if (arrangement.items.isEmpty()) {
         return set;
@@ -64,8 +66,12 @@ SetProgram SetCompiler::compile(const Arrangement& arrangement,
         PairKey key;
         key.sourceTrackId = ordered.at(i).mixxxTrackId;
         key.targetTrackId = ordered.at(i + 1).mixxxTrackId;
-        const TransitionPlan plan = TransitionPlanner::plan(
-                ordered.at(i), ordered.at(i + 1), intent, overrides.value(key));
+        // Precedence lives in one place, so every caller agrees: pair > act.
+        const TransitionPlan plan = TransitionPlanner::plan(ordered.at(i),
+                ordered.at(i + 1),
+                intent,
+                OverrideRepository::resolve(
+                        overrides, actRules, key, ordered.at(i).act));
         SetTransition transition;
         transition.fromPosition = i;
         transition.program = PreviewCompiler::compile(plan);
