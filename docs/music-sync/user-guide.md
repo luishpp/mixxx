@@ -99,9 +99,31 @@ Varre até 500 faixas e seleciona as que **não têm beatgrid/BPM ou não têm t
 
 ### ▸ Preset de energia (combo)
 
-*Ascending · Center peak · **Late peak** (padrão) · Waves · Constant* — a forma da jornada de
-energia do set. **É lido apenas no instante em que você clica em Generate sequence.** Mudar o
-combo sozinho não faz nada.
+A **forma da jornada** que o motor tenta seguir. Ele compara a energia de cada faixa com o alvo da
+curva **na posição em que ela cai no set** e usa isso para (a) escolher a faixa de abertura e
+(b) pontuar o *energy fit* de cada alternativa.
+
+> **É lido só no instante do clique em Generate sequence.** Mudar o combo sozinho não faz nada —
+> e mudar depois **não** altera um set já gerado.
+
+As curvas são estas (energia 0..1 × posição no set):
+
+| Preset | Curva | O que você ouve | Quando usar |
+|---|---|---|---|
+| **Ascending** | 0.25 → 1.00, reta | Sobe sem parar do início ao fim. Termina no ponto mais alto. | Aquecimento, warm-up, set que entrega a pista para outro DJ |
+| **Center peak** | 0.30 → **1.00 no meio** → 0.40 | Pico na metade e desce; fecha mais baixo que começou | Set de meio de noite, quando alguém entra depois de você |
+| **Late peak** *(padrão)* | 0.25 → 0.50 → 0.78 → **1.00 aos 90%** → 0.65 | Constrói longo, estoura perto do fim e alivia no fecho | **O do seu plano**: pico no melodic techno/trance e retorno emocional (§6) |
+| **Waves** | 0.30 → 0.80 → **0.45** → 0.90 → 0.50 | Dois picos com uma **queda no meio** | O §17 do plano: *"a queda depois de Under Control é intencional"* — dá para reconstruir |
+| **Constant** | 0.60 reto | Nenhuma jornada: energia parelha do começo ao fim | Fundo de festa, bar, quando o set não é o protagonista |
+
+**Impacto prático:** com *Ascending*, a abertura vai ser a faixa **mais fraca** que você tem (alvo
+0.25 na posição 0). Com *Constant*, o motor não tem preferência de abertura — qualquer faixa de
+energia média serve, e o *energy fit* deixa de ser um critério útil.
+
+> ⚠️ **A curva só reordena dentro do ato**, e só quando a ordem do plano não lidera. Como hoje **a
+> ordem do plano sempre lidera** (veja *Generate sequence*), o preset afeta sobretudo o **número
+> de *energy fit*** que você vê — é um **termômetro** de quão bem o seu set casa com aquela
+> jornada, não um comando que o reordena.
 
 ### ▸ Generate sequence
 
@@ -160,16 +182,23 @@ diálogo de resultado.
 
 Cabeçalho: `Best of N alternative(s) — average compatibility X%, energy fit Y%`.
 
-Por faixa: posição, artista - título, `(BPM, Camelot)`, `[locked]` se travada.
-Por par consecutivo:
+Abaixo, **uma linha por faixa**:
 
-```
-[87%] Strong match: 1.0 BPM difference, 10B -> 10B, stable energy.
-  ↳ EQ Blend — 32 bars, 88% conf
-```
+| Coluna | Significado |
+|---|---|
+| **#** | posição no set |
+| **Act** | o ato (1–7); `—` = extra, toca no fim |
+| **Track** | artista - título, `[locked]` se for âncora presa |
+| **Exit @** | onde **esta** faixa entrega para a próxima (editável) |
+| **Transition** | o tipo escolhido, com a origem: `(pair)`, `(act)` ou nada = automático |
+| **Bars** | duração da transição, mesma marcação de origem |
+| **Match** | o PairScore da passagem para a próxima (harmonia, tempo, frase, energia, janela) |
+| **Plan** | a explicação — ou os **avisos**, se houver |
 
-- **`[87%]`** = PairScore (harmonia, tempo, frase, energia, janela) + explicação.
-- **`↳`** = a transição escolhida: **tipo — duração em compassos — confiança**.
+A **última linha** mostra `—` nas colunas de transição: ela não entrega para ninguém.
+
+O `(pair)` / `(act)` existe para você responder *"por que isto virou Cut?"* olhando, sem abrir o
+código.
 
 ### Tipos de transição e quando cada um sai
 
@@ -196,26 +225,67 @@ sincronizam.
 
 ### Editar uma transição (RF-010)
 
-Ao lado do seletor de par:
+A edição age na **linha selecionada** da tabela:
 
 ```
-Transition: [Automatic ▾]      Bars: [Automatic ▾]
+Selected transition: [Automatic ▾]  Bars: [Automatic ▾]  Exit @: [____]
 ```
 
-- **Automatic** (padrão) — o motor escolhe e explica, como sempre.
-- Escolha um **tipo** e/ou um **número de compassos** (8/16/32/64) para **aquele par**. Os dois são
-  independentes: *"Bass Swap, você escolhe o tamanho"* e *"como quiser, mas 64 compassos"* são
-  respostas válidas.
+#### O combo **Transition** — o que cada escolha faz no áudio
+
+| Opção | O que acontece nos decks | Sincroniza? | Bom para |
+|---|---|---|---|
+| **Automatic** *(padrão)* | O motor escolhe pelas regras da tabela acima e **explica** | conforme o tipo escolhido | Deixe assim até algo te incomodar |
+| **Crossfade** | Volume de A desce e de B sobe, em paralelo, pelo crossfader. Nada de EQ. | sim | Intro/outro limpos, modo seguro |
+| **EQ Blend** | B entra com o **grave zerado**, sobe volume, e aos 60% os graves **trocam** | sim | O feijão com arroz do mix harmônico |
+| **Bass Swap** | Igual ao EQ Blend, mas a **troca de graves é no meio** (50%) e mais decidida | sim | Duas faixas com kick estável e frase clara (§19.4) |
+| **Breakdown swap** | Longo e gradual: grave de A sai cedo, **filtro varre A** enquanto B cresce por baixo | **sim, se os tempos batem** | Tom incompatível — o §16 pede isto, **não** um corte |
+| **Filter** | B entra e A é **varrida pelo filtro**, sem troca de graves | sim | Usar com moderação (§19.5): filtro não salva transição mal planejada |
+| **Cut on phrase** | Segura as duas e **troca seco na frase** | **não** — cada faixa no tempo dela | Quando A termina com impacto e B começa com ataque (§19.6) |
+
+**O impacto de escolher errado é audível.** Forçar `Cut` num par harmônico e do mesmo tempo joga
+fora uma mescla que ia funcionar. Forçar `Bass Swap` num par com 20% de diferença de tempo faz o
+Mixxx esticar a faixa nova — foi assim que o Adagio saiu a −20% de pitch. O motor não vai te
+impedir: **você mandou**.
+
+> **`Automatic` não é "nenhum tipo"** — é *"decida por mim"*. É a **ausência** de escolha, e é por
+> isso que voltar para ele **apaga** o registro em vez de gravar um vazio.
+
+#### **Bars** e **Exit @**
+
+- **Bars** (8/16/32/64) — o **tamanho** da transição. Automático = o preferido (32) limitado pela
+  janela, com os tetos por tipo (Cut ≤ 8).
+- **Exit @** (mm:ss, vazio = automático) — **onde esta faixa entrega**. É o que controla **quanto
+  tempo a faixa toca**: o §9 pede *"flashes de 90 segundos a 3 minutos"*, e isso é impossível
+  enquanto a saída for a que a análise achou. Ponha `1:30` num flash e ele vira um flash.
+
+Os três são independentes: *"Bass Swap, você escolhe o tamanho"*, *"como quiser, mas 64
+compassos"* e *"só sai mais cedo"* são todas respostas válidas.
 
 **A sua escolha de duração vence as heurísticas.** O limite da janela e o teto de 8 compassos do
 Cut são *gosto do planejador* — você acaba de passar por cima. **Só a física ainda discute**: se a
 transição não couber antes da faixa acabar, ela é aparada e o relatório **avisa**. Sair da janela
 também é permitido, com aviso. Nada acontece calado.
 
-> **A escolha fica colada no _par de faixas_, não na posição** (sidecar, migration v7). Rodar
+#### Regra por ato
+
+```
+Rule for act: [Act 4 ▾] [Cut on phrase ▾] [16 ▾] [Apply to act]
+```
+
+O §16 pensa em **blocos** — *"transições longas no progressive/melodic; rápidas nos flashes e no
+peak crossover"*. Ajustar 36 pares na mão para dizer isso seria a ferramenta errada.
+
+**Precedência: `par > ato > automático`.** Um par só declara aquilo em que **discorda** do seu ato:
+se o Ato 4 manda `Cut / 16` e um par diz só `Bass Swap`, esse par fica **Bass Swap com 16
+compassos** — o tipo dele, os compassos do ato.
+
+Aplicar uma regra **não apaga** os ajustes de par: eles continuam vencendo. Para zerar um ato,
+escolha `Automatic`/`Automatic` e **Apply to act**.
+
+> **A escolha fica colada no _par de faixas_, não na posição** (sidecar). Rodar
 > *Generate sequence* de novo reordena posições — um ajuste preso à "posição 7" reapareceria em
-> cima de **outro par**. Por isso *Automatic* é a **ausência** de registro: não decidir não é uma
-> decisão.
+> cima de **outro par**.
 
 **Preview on decks**, **Run set** e o relatório planejam pelos **mesmos** overrides — o que você
 ouve na prévia é o que o set vai fazer. Ajuste → ouça → repita.
@@ -225,7 +295,8 @@ ouve na prévia é o que o set vai fazer. Ajuste → ouça → repita.
 
 ### Preview em dois decks
 
-`[seletor de par]` **Preview on decks** · **Repeat** · **Cancel preview** + rótulo de estado.
+Selecione a linha e use **Preview on decks** · **Repeat** · **Cancel preview**. O rótulo abaixo
+mostra o estado.
 
 ### ▸ Run set (e ensaio por ato)
 
@@ -305,7 +376,7 @@ esticar duas faixas sincronizadas).
 
 ## Onde ficam os dados
 
-- **Sidecar**: `%LOCALAPPDATA%\Mixxx\music-sync-dj.sqlite` (schema v4) — snapshots e settings do
+- **Sidecar**: `%LOCALAPPDATA%\Mixxx\music-sync-dj.sqlite` (schema v8) — snapshots, escolhas de transição e settings do
   módulo. Separado da biblioteca do Mixxx; apagá-lo só perde os snapshots (é só re-snapshotar).
 - A biblioteca, os waveforms e a análise nativa continuam sendo do **Mixxx** — o módulo lê, não
   reescreve.
