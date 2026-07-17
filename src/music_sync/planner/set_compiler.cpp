@@ -5,6 +5,34 @@
 
 namespace mixxx::music_sync {
 
+Arrangement SetCompiler::scopeToActs(const Arrangement& arrangement,
+        const QHash<std::int64_t, TrackFeatures>& byId,
+        int fromAct,
+        int toAct) {
+    if (fromAct <= 0 && toAct <= 0) {
+        return arrangement;
+    }
+    Arrangement scoped;
+    scoped.algorithmVersion = arrangement.algorithmVersion;
+    for (const ArrangementItem& item : arrangement.items) {
+        const auto it = byId.constFind(item.mixxxTrackId);
+        if (it == byId.constEnd()) {
+            continue;
+        }
+        const int act = it.value().act;
+        if (fromAct > 0 && act < fromAct) {
+            continue;
+        }
+        if (toAct > 0 && act > toAct) {
+            continue;
+        }
+        scoped.items.append(item);
+    }
+    // compile() renumbers positions and re-plans every pair, so the excerpt
+    // needs no further fixing up.
+    return scoped;
+}
+
 SetProgram SetCompiler::compile(const Arrangement& arrangement,
         const QHash<std::int64_t, TrackFeatures>& byId,
         const MixIntent& intent) {
@@ -57,6 +85,7 @@ SetProgram SetCompiler::compile(const Arrangement& arrangement,
         item.artist = track.artist;
         item.title = track.title;
         item.bpm = track.bpm;
+        item.act = track.act;
 
         // Comes in where the previous transition puts it; the opener starts at
         // its own entry window.

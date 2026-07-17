@@ -148,6 +148,63 @@ TEST(MusicSyncSetTest, EstimatedDurationAddsUpThePlaySpans) {
     EXPECT_FALSE(set.explanation.isEmpty());
 }
 
+Fixture makeActFixture() {
+    // Acts 1, 2 and 3 with two tracks each.
+    Fixture fx;
+    for (int i = 0; i < 6; ++i) {
+        TrackFeatures track = makeSetTrack(i + 1, 124.0, QStringLiteral("8A"));
+        track.act = (i / 2) + 1;
+        fx.byId.insert(track.mixxxTrackId, track);
+        ArrangementItem item;
+        item.mixxxTrackId = track.mixxxTrackId;
+        item.position = i;
+        fx.arrangement.items.append(item);
+    }
+    return fx;
+}
+
+TEST(MusicSyncSetTest, ScopeToActsKeepsOnlyTheChosenStretch) {
+    const Fixture fx = makeActFixture();
+    // Spec 19, Ensaio 3: act 2 handing over to act 3.
+    const Arrangement scoped =
+            SetCompiler::scopeToActs(fx.arrangement, fx.byId, 2, 3);
+    ASSERT_EQ(scoped.items.size(), 4);
+    for (const ArrangementItem& item : scoped.items) {
+        const int act = fx.byId.value(item.mixxxTrackId).act;
+        EXPECT_GE(act, 2);
+        EXPECT_LE(act, 3);
+    }
+}
+
+TEST(MusicSyncSetTest, ScopeToActsUnboundedReturnsEverything) {
+    const Fixture fx = makeActFixture();
+    EXPECT_EQ(SetCompiler::scopeToActs(fx.arrangement, fx.byId, 0, 0).items.size(), 6);
+}
+
+TEST(MusicSyncSetTest, AnExcerptCompilesAsIfItWereTheWholeSet) {
+    // Why scoping happens before compiling: an excerpt starting mid-set must
+    // still open on deck 0 and must not hand over to a track it does not have.
+    // Slicing a compiled program would break both.
+    const Fixture fx = makeActFixture();
+    const Arrangement scoped =
+            SetCompiler::scopeToActs(fx.arrangement, fx.byId, 3, 3); // last act only
+    const SetProgram set = SetCompiler::compile(scoped, fx.byId, MixIntent());
+
+    ASSERT_EQ(set.items.size(), 2);
+    EXPECT_EQ(set.items.at(0).deckIndex, 0); // opens on deck 0, not deck 4 % 2
+    EXPECT_EQ(set.items.at(1).deckIndex, 1);
+    EXPECT_EQ(set.items.at(0).position, 0); // renumbered from the excerpt's start
+    EXPECT_EQ(set.transitions.size(), 1);   // one handover, none dangling
+    EXPECT_EQ(set.items.at(0).act, 3);      // the act travels into the program
+    // The excerpt's last track has no successor, so it plays out.
+    EXPECT_EQ(set.items.last().exitMs, set.items.last().durationMs);
+}
+
+TEST(MusicSyncSetTest, ScopingAnEmptyActYieldsNothingToRun) {
+    const Fixture fx = makeActFixture();
+    EXPECT_TRUE(SetCompiler::scopeToActs(fx.arrangement, fx.byId, 7, 7).items.isEmpty());
+}
+
 TEST(MusicSyncSetTest, ReachedExitDecidesTheHandover) {
     // The decision the whole set hinges on: 5:00 track handing over at 3:30.
     constexpr std::int64_t kDuration = 300000;

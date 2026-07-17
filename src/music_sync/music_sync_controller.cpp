@@ -380,7 +380,10 @@ void MusicSyncController::cancelPreview() {
     }
 }
 
-bool MusicSyncController::runSet(const Arrangement& arrangement, const MixIntent& intent) {
+bool MusicSyncController::runSet(const Arrangement& arrangement,
+        const MixIntent& intent,
+        int fromAct,
+        int toAct) {
     if (!m_pCoreServices || arrangement.items.isEmpty()) {
         return false;
     }
@@ -398,7 +401,15 @@ bool MusicSyncController::runSet(const Arrangement& arrangement, const MixIntent
     for (const TrackFeatures& features : loadSnapshots()) {
         byId.insert(features.mixxxTrackId, features);
     }
-    const SetProgram program = SetCompiler::compile(arrangement, byId, intent);
+    // Scope first, compile second: the compiler assigns decks and plans every
+    // handover for whatever it is given, so an excerpt comes out self-contained.
+    const Arrangement scoped =
+            SetCompiler::scopeToActs(arrangement, byId, fromAct, toAct);
+    if (scoped.items.isEmpty()) {
+        kLogger.warning() << "No tracks in acts" << fromAct << "-" << toAct;
+        return false;
+    }
+    const SetProgram program = SetCompiler::compile(scoped, byId, intent);
     if (program.items.isEmpty()) {
         return false;
     }

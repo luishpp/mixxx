@@ -450,6 +450,19 @@ void DlgMusicSync::slotGenerateSequence() {
 
     // --- Fase 7: run the whole set ---
     auto* setRow = new QHBoxLayout();
+    // Spec 19 (Ensaio 3) rehearses blocks: one act, or one act handing over to
+    // the next, without sitting through everything before it.
+    auto* scopeSelector = new QComboBox(&dialog);
+    scopeSelector->addItem(tr("Whole set"), 0);
+    for (int act = 1; act <= 7; ++act) {
+        scopeSelector->addItem(tr("Act %1").arg(act), act * 100 + act);
+    }
+    for (int act = 1; act < 7; ++act) {
+        scopeSelector->addItem(
+                tr("Act %1 → %2").arg(act).arg(act + 1), act * 100 + act + 1);
+    }
+    setRow->addWidget(scopeSelector);
+
     auto* runSetButton = new QPushButton(tr("Run set"), &dialog);
     runSetButton->setToolTip(
             tr("Plays the whole sequence on the decks, handing over automatically."));
@@ -470,12 +483,18 @@ void DlgMusicSync::slotGenerateSequence() {
     setStatus->setWordWrap(true);
     layout->addWidget(setStatus);
 
-    connect(runSetButton, &QPushButton::clicked, &dialog, [this, &best, intent, setStatus]() {
-        if (!m_pController->runSet(best, intent)) {
-            setStatus->setText(tr("Cannot run the set — need two decks and every "
-                                  "track available in the library."));
-        }
-    });
+    connect(runSetButton,
+            &QPushButton::clicked,
+            &dialog,
+            [this, &best, intent, setStatus, scopeSelector]() {
+                const int scope = scopeSelector->currentData().toInt();
+                const int fromAct = scope / 100;
+                const int toAct = scope % 100;
+                if (!m_pController->runSet(best, intent, fromAct, toAct)) {
+                    setStatus->setText(tr("Cannot run it — need two decks, every track in "
+                                          "the library, and tracks in the chosen acts."));
+                }
+            });
     connect(pauseButton, &QPushButton::clicked, &dialog, [this]() {
         m_pController->pauseSet();
     });

@@ -95,8 +95,14 @@ class MusicSyncController : public QObject {
     // --- Fase 7: mini-set executor ---
 
     /// Compiles `arrangement` into a set program and runs it on the decks.
+    /// `fromAct`/`toAct` restrict it to a stretch of the narrative (0 = the whole
+    /// set), which is how spec 19's Ensaio 3 rehearses one act, or one act
+    /// handing over to the next, without sitting through everything before it.
     /// Returns false when the tracks or deck controls are unavailable.
-    bool runSet(const Arrangement& arrangement, const MixIntent& intent);
+    bool runSet(const Arrangement& arrangement,
+            const MixIntent& intent,
+            int fromAct = 0,
+            int toAct = 0);
 
     void pauseSet();
     void resumeSet();

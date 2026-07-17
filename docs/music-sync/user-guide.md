@@ -187,6 +187,25 @@ Por par consecutivo:
 
 `[seletor de par]` **Preview on decks** · **Repeat** · **Cancel preview** + rótulo de estado.
 
+### ▸ Run set (e ensaio por ato)
+
+Toca a sequência inteira nos decks, entregando de uma faixa para a outra sozinho. O seletor ao
+lado escolhe **o quanto** rodar:
+
+| Escolha | Para quê |
+|---|---|
+| **Whole set** | o set completo, do Ato 1 ao 7 |
+| **Act N** | ensaiar um ato isolado |
+| **Act N → N+1** | ensaiar a **virada** entre atos (§19, Ensaio 3) |
+
+Sem isso, ensaiar a passagem do Ato 4 para o 5 exigiria rodar o set inteiro e esperar ~50 min
+chegar lá. O trecho é compilado **como se fosse um set próprio**: abre no deck 1 e não tenta
+entregar para uma faixa que não está nele.
+
+**Pause / Resume / Skip / Stop set** controlam a execução. **Mover o crossfader** entra em
+*Manual override* e devolve os decks. O set **continua tocando se você fechar o diálogo** — só a
+prévia é cancelada.
+
 - **Preview on decks**: carrega A no deck 1 e B no deck 2, posiciona nos pontos planejados e
   executa a automação (crossfader/volumes/EQ) guiada pela **posição de reprodução** do deck A —
   não por relógio.

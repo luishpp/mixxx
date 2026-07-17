@@ -26,6 +26,9 @@ struct SetItem {
     QString artist;
     QString title;
     double bpm = 0.0;
+    /// The act this track belongs to (1..7; 0 = extra). Carried through so the
+    /// executor and the report can say where in the narrative the set is.
+    int act = 0;
 
     /// Milliseconds this track is the live deck before handing over.
     std::int64_t playSpanMs() const {
