@@ -134,7 +134,6 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
           m_pStatusLabel(nullptr),
           m_pEnabledCheckBox(nullptr),
           m_pSnapshotButton(nullptr),
-          m_pReloadButton(nullptr),
           m_pClearButton(nullptr),
           m_pAnalyzeButton(nullptr),
           m_pEnergyPreset(nullptr),
@@ -186,10 +185,6 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
     m_pSnapshotButton = new QPushButton(tr("Read native analysis from library"), this);
     connect(m_pSnapshotButton, &QPushButton::clicked, this, &DlgMusicSync::slotSnapshotLibrary);
     pActions->addWidget(m_pSnapshotButton);
-
-    m_pReloadButton = new QPushButton(tr("Reload snapshots"), this);
-    connect(m_pReloadButton, &QPushButton::clicked, this, &DlgMusicSync::slotReloadSnapshots);
-    pActions->addWidget(m_pReloadButton);
 
     m_pClearButton = new QPushButton(tr("Clear snapshots"), this);
     m_pClearButton->setToolTip(
@@ -263,7 +258,6 @@ void DlgMusicSync::updateActionsEnabled() {
     }
     const bool enabled = m_ready && m_pEnabledCheckBox->isChecked() && !m_busy;
     m_pSnapshotButton->setEnabled(enabled);
-    m_pReloadButton->setEnabled(enabled);
     m_pClearButton->setEnabled(enabled);
     m_pAnalyzeButton->setEnabled(enabled);
     m_pEnergyPreset->setEnabled(enabled);
@@ -288,10 +282,6 @@ void DlgMusicSync::slotSnapshotLibrary() {
     const QVector<TrackFeatures> rows = m_pController->snapshotLibrary(kSnapshotLimit);
     populateTable(rows);
     setBusy(false);
-}
-
-void DlgMusicSync::slotReloadSnapshots() {
-    populateTable(m_pController->loadSnapshots());
 }
 
 void DlgMusicSync::slotClearSnapshots() {

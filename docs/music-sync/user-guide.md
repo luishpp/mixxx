@@ -20,8 +20,8 @@ Numa biblioteca nova, use nesta ordem:
    quiser; **Run set** para tocar o set (ou só um ato).
 
 > **Depois de atualizar o módulo (novo build), clique em "Read native analysis from library".**
-> As janelas/seções ficam **gravadas** no sidecar — "Reload snapshots" só relê o que está lá,
-> com as regras antigas. Só o *Read native analysis* recalcula.
+> As janelas/seções ficam **gravadas** no sidecar e o painel só as relê ao abrir — com as regras
+> antigas. Só o *Read native analysis* recalcula com o build novo.
 
 ---
 
@@ -68,12 +68,8 @@ analisada, ela aparece com `Analyzed = No` e sem dados.
 **Use quando:** primeira vez, depois de adicionar faixas, depois do *Analyze missing*, e
 **sempre que atualizar o módulo** (para recalcular com as regras novas).
 
-### ▸ Reload snapshots
-
-**Somente leitura.** Relê as linhas já gravadas no sidecar e repinta a tabela. **Não recalcula
-nada** — não toca na biblioteca, não refaz janelas nem seções.
-
-**Use quando:** só quiser atualizar a visão do que está armazenado.
+> O painel **relê os snapshots gravados sozinho ao abrir** e repinta a tabela depois de cada ação
+> (Read/Analyze/Clear), então não há um botão separado de "recarregar" — reabrir o painel já faz isso.
 
 ### ▸ Clear snapshots
 
@@ -394,8 +390,8 @@ A faixa não tem **waveform** armazenado. Analise-a pela biblioteca do Mixxx (cl
 *Analisar*) e depois clique em **Read native analysis from library**.
 
 **Transições não mudaram depois de atualizar o módulo**
-Você clicou em *Reload snapshots* (que só relê o gravado). Clique em
-**Read native analysis from library** para recalcular.
+Reabrir o painel só relê o que está gravado (com as regras antigas). Clique em
+**Read native analysis from library** para recalcular com o build novo.
 
 **Ajustei uma transição e ela voltou ao automático**
 O ajuste é gravado por **par de faixas**. Se o par deixou de existir na sequência (você reordenou
