@@ -190,6 +190,7 @@ Abaixo, **uma linha por faixa**:
 | **Act** | o ato (1–7); `—` = extra, toca no fim |
 | **Track** | artista - título, `[locked]` se for âncora presa |
 | **Exit @** | onde **esta** faixa entrega para a próxima (editável) |
+| **Enter @** | onde a **próxima** faixa entra (mm:ss) — para pular uma intro longa (editável) |
 | **Transition** | o tipo escolhido, com a origem: `(pair)`, `(act)` ou nada = automático |
 | **Bars** | duração da transição, mesma marcação de origem |
 | **Match** | o PairScore da passagem para a próxima (harmonia, tempo, frase, energia, janela) |
@@ -228,7 +229,7 @@ sincronizam.
 A edição age na **linha selecionada** da tabela:
 
 ```
-Selected transition: [Automatic ▾]  Bars: [Automatic ▾]  Exit @: [____]
+Selected transition: [Automatic ▾]  Bars: [Automatic ▾]  Exit @: [____]  Enter @: [____]
 ```
 
 #### O combo **Transition** — o que cada escolha faz no áudio
@@ -251,16 +252,26 @@ impedir: **você mandou**.
 > **`Automatic` não é "nenhum tipo"** — é *"decida por mim"*. É a **ausência** de escolha, e é por
 > isso que voltar para ele **apaga** o registro em vez de gravar um vazio.
 
-#### **Bars** e **Exit @**
+#### **Bars**, **Exit @** e **Enter @**
 
 - **Bars** (8/16/32/64) — o **tamanho** da transição. Automático = o preferido (32) limitado pela
   janela, com os tetos por tipo (Cut ≤ 8).
 - **Exit @** (mm:ss, vazio = automático) — **onde esta faixa entrega**. É o que controla **quanto
   tempo a faixa toca**: o §9 pede *"flashes de 90 segundos a 3 minutos"*, e isso é impossível
   enquanto a saída for a que a análise achou. Ponha `1:30` num flash e ele vira um flash.
+- **Enter @** (mm:ss, vazio = automático) — **onde a próxima faixa entra**. O automático prefere um
+  ponto de baixa energia (a intro), o que numa faixa de **intro longa derruba a energia bem na
+  virada**. Aponte um valor depois da intro (ex.: `0:48`) e o groove novo já entra por baixo
+  enquanto a faixa que sai ainda está batendo — mantém o clímax entre faixas.
 
-Os três são independentes: *"Bass Swap, você escolhe o tamanho"*, *"como quiser, mas 64
-compassos"* e *"só sai mais cedo"* são todas respostas válidas.
+Ambos os pontos são do **par** (a linha selecionada) e independentes: **Exit @** é onde **A** sai,
+**Enter @** é onde **B** entra. O **Preview on decks** toca exatamente esse par, então dá para
+ouvir os dois ajustes juntos. *"Bass Swap, você escolhe o tamanho"*, *"64 compassos"*, *"sai mais
+cedo"* e *"a próxima entra depois da intro"* são todas respostas válidas e combináveis.
+
+> **Achar a faixa de intro longa:** ela é a **próxima** faixa de alguma transição. Selecione a
+> linha **anterior** a ela (a coluna **Enter @** já mostra onde ela entra hoje) e ajuste o
+> **Enter @** dessa linha.
 
 ##### Acelerar (ou alongar) uma transição
 

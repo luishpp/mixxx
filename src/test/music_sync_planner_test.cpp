@@ -606,6 +606,30 @@ TEST(MusicSyncTransitionTest, OverrideCannotOutlastTheTrack) {
     EXPECT_TRUE(warned);
 }
 
+TEST(MusicSyncTransitionTest, OverrideEntryPointSkipsTheIntro) {
+    // A long intro drops the energy right at the handover; the DJ points the
+    // incoming track past it. The default entry is the low-energy window at 0.
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 124.5, QStringLiteral("9A"), 0.62);
+    EXPECT_EQ(TransitionPlanner::plan(a, b, intent).targetEntryMs, 0);
+
+    TransitionOverride override;
+    override.targetEntryMs = 48000;
+    EXPECT_EQ(TransitionPlanner::plan(a, b, intent, override).targetEntryMs, 48000);
+}
+
+TEST(MusicSyncTransitionTest, OverrideEntryCannotSeekOffTheEnd) {
+    // Physics again: an entry past the track length would seek the deck off the
+    // end. Clamp to the track (the fixture is 300 s long).
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 124.5, QStringLiteral("9A"), 0.62);
+    TransitionOverride override;
+    override.targetEntryMs = 999999999;
+    EXPECT_EQ(TransitionPlanner::plan(a, b, intent, override).targetEntryMs, 300000);
+}
+
 TEST(MusicSyncTransitionTest, EmptyOverrideChangesNothing) {
     const MixIntent intent;
     const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);

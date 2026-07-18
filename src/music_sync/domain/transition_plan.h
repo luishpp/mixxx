@@ -39,9 +39,15 @@ struct TransitionOverride {
     /// Spec 9 needs this — "flashes nostálgicos: faixas para 90 segundos a 3
     /// minutos" is unreachable while the exit is whatever the analysis found.
     std::optional<std::int64_t> sourceExitMs;
+    /// Where the INCOMING track comes in, in ms. Automatic entry prefers a
+    /// low-energy point (the intro), which on a track with a long intro drops
+    /// the energy right at the handover. Setting this skips past the intro so
+    /// the incoming groove lands while the outgoing one is still driving.
+    std::optional<std::int64_t> targetEntryMs;
 
     bool isEmpty() const {
-        return !type.has_value() && !bars.has_value() && !sourceExitMs.has_value();
+        return !type.has_value() && !bars.has_value() && !sourceExitMs.has_value() &&
+                !targetEntryMs.has_value();
     }
 
     /// The fields this override actually decides, layered over `base`. Used to
@@ -56,6 +62,9 @@ struct TransitionOverride {
         }
         if (sourceExitMs) {
             out.sourceExitMs = sourceExitMs;
+        }
+        if (targetEntryMs) {
+            out.targetEntryMs = targetEntryMs;
         }
         return out;
     }

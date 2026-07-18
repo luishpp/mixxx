@@ -167,7 +167,12 @@ TransitionPlan TransitionPlanner::plan(const TrackFeatures& from,
                               ? from.exitWindows.first().startMs
                               : std::max<std::int64_t>(0, from.durationMs - 60000));
     plan.sourceExitMs = std::clamp<std::int64_t>(plan.sourceExitMs, 0, from.durationMs);
-    plan.targetEntryMs = !to.entryWindows.isEmpty() ? to.entryWindows.first().startMs : 0;
+    // The DJ's entry point wins; otherwise the best entry window (which prefers
+    // the low-energy intro). Clamped to the track so a bad value can't seek off
+    // the end.
+    plan.targetEntryMs = override.targetEntryMs
+            ? std::clamp<std::int64_t>(*override.targetEntryMs, 0, to.durationMs)
+            : (!to.entryWindows.isEmpty() ? to.entryWindows.first().startMs : 0);
 
     int bars;
     if (override.bars && *override.bars > 0) {

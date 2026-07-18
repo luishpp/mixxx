@@ -189,6 +189,34 @@ TEST(MusicSyncOverrideRepositoryTest, RoundTripsAPairChoice) {
     EXPECT_EQ(*loaded.value(key).bars, 64);
 }
 
+TEST(MusicSyncOverrideRepositoryTest, RoundTripsExitAndEntryPoints) {
+    // The two handover points are per-pair, independent, and must survive a
+    // reload: the exit (where this track leaves) and the entry (where the next
+    // one comes in, skipping a long intro).
+    QTemporaryDir tempDir;
+    ASSERT_TRUE(tempDir.isValid());
+    SidecarDatabase db(tempDir.filePath(QStringLiteral("music-sync-dj.sqlite")));
+    ASSERT_TRUE(db.open());
+    ASSERT_TRUE(db.applyMigrations());
+    OverrideRepository repo(db.database());
+
+    PairKey key{20, 21};
+    TransitionOverride override;
+    override.sourceExitMs = 185000;
+    override.targetEntryMs = 48000;
+    ASSERT_TRUE(repo.save(key, override));
+
+    const auto loaded = repo.loadAll();
+    ASSERT_TRUE(loaded.contains(key));
+    ASSERT_TRUE(loaded.value(key).sourceExitMs.has_value());
+    ASSERT_TRUE(loaded.value(key).targetEntryMs.has_value());
+    EXPECT_EQ(*loaded.value(key).sourceExitMs, 185000);
+    EXPECT_EQ(*loaded.value(key).targetEntryMs, 48000);
+    // Entry alone is not enough to keep type/bars from being automatic.
+    EXPECT_FALSE(loaded.value(key).type.has_value());
+    EXPECT_FALSE(loaded.value(key).bars.has_value());
+}
+
 TEST(MusicSyncOverrideRepositoryTest, EitherFieldAloneIsAValidChoice) {
     // "Bass Swap, you pick the length" and "however you like, but 64 bars" are
     // both real answers, so each field is independently optional.

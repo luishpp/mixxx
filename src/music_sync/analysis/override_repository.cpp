@@ -21,7 +21,7 @@ QHash<PairKey, TransitionOverride> OverrideRepository::loadAll() const {
     QSqlQuery query(m_database);
     if (!query.exec(QStringLiteral(
                 "SELECT source_track_id, target_track_id, transition_type, bars, "
-                "       source_exit_ms FROM MusicSyncTransitionOverrides"))) {
+                "       source_exit_ms, target_entry_ms FROM MusicSyncTransitionOverrides"))) {
         kLogger.warning() << "Could not load transition overrides:" << query.lastError();
         return out;
     }
@@ -39,6 +39,9 @@ QHash<PairKey, TransitionOverride> OverrideRepository::loadAll() const {
         }
         if (!query.value(4).isNull()) {
             override.sourceExitMs = query.value(4).toLongLong();
+        }
+        if (!query.value(5).isNull()) {
+            override.targetEntryMs = query.value(5).toLongLong();
         }
         if (!override.isEmpty()) {
             out.insert(key, override);
@@ -67,11 +70,12 @@ bool OverrideRepository::save(const PairKey& key, const TransitionOverride& over
     query.prepare(QStringLiteral(
             "INSERT INTO MusicSyncTransitionOverrides ("
             "  source_track_id, target_track_id, transition_type, bars, source_exit_ms,"
-            "  updated_at) "
-            "VALUES (:source, :target, :type, :bars, :exit, datetime('now')) "
+            "  target_entry_ms, updated_at) "
+            "VALUES (:source, :target, :type, :bars, :exit, :entry, datetime('now')) "
             "ON CONFLICT(source_track_id, target_track_id) DO UPDATE SET "
             "  transition_type = excluded.transition_type,"
             "  bars = excluded.bars, source_exit_ms = excluded.source_exit_ms,"
+            "  target_entry_ms = excluded.target_entry_ms,"
             "  updated_at = excluded.updated_at"));
     query.bindValue(QStringLiteral(":source"), static_cast<qlonglong>(key.sourceTrackId));
     query.bindValue(QStringLiteral(":target"), static_cast<qlonglong>(key.targetTrackId));
@@ -82,6 +86,9 @@ bool OverrideRepository::save(const PairKey& key, const TransitionOverride& over
     query.bindValue(QStringLiteral(":exit"),
             override.sourceExitMs ? QVariant(static_cast<qlonglong>(*override.sourceExitMs))
                                   : QVariant());
+    query.bindValue(QStringLiteral(":entry"),
+            override.targetEntryMs ? QVariant(static_cast<qlonglong>(*override.targetEntryMs))
+                                   : QVariant());
     if (!query.exec()) {
         kLogger.warning() << "Could not save override:" << query.lastError();
         return false;

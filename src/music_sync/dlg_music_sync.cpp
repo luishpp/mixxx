@@ -377,9 +377,9 @@ void DlgMusicSync::slotGenerateSequence() {
     // One row per track: what plays, where it hands over, and how. Editing lives
     // in the row it belongs to instead of in a combo you have to hunt for.
     auto* grid = new QTableWidget(&dialog);
-    grid->setColumnCount(8);
+    grid->setColumnCount(9);
     grid->setHorizontalHeaderLabels(QStringList()
-            << tr("#") << tr("Act") << tr("Track") << tr("Exit @")
+            << tr("#") << tr("Act") << tr("Track") << tr("Exit @") << tr("Enter @")
             << tr("Transition") << tr("Bars") << tr("Match") << tr("Plan"));
     grid->setRowCount(best.items.size());
     grid->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -406,7 +406,7 @@ void DlgMusicSync::slotGenerateSequence() {
                                     best.items.at(i).locked ? tr("  [locked]") : QString()));
             if (i + 1 >= best.items.size()) {
                 // The closer hands over to nobody: nothing here to plan or edit.
-                for (int column = 3; column < 8; ++column) {
+                for (int column = 3; column < 9; ++column) {
                     setCell(column, QStringLiteral("—"));
                 }
                 continue;
@@ -425,17 +425,22 @@ void DlgMusicSync::slotGenerateSequence() {
             const auto origin = [&](bool fromPair, bool fromAct) {
                 return fromPair ? tr(" (pair)") : (fromAct ? tr(" (act)") : QString());
             };
+            // Where the incoming track comes in. Only a pair can set this — there is
+            // no act-wide entry (it is per track, like the exit).
             setCell(4,
+                    msToClock(plan.targetEntryMs) +
+                            origin(pairs.value(key).targetEntryMs.has_value(), false));
+            setCell(5,
                     transitionTypeName(plan.type) +
                             origin(pairs.value(key).type.has_value(),
                                     actRules.value(a.act).type.has_value()));
-            setCell(5,
+            setCell(6,
                     QString::number(plan.durationBars) +
                             origin(pairs.value(key).bars.has_value(),
                                     actRules.value(a.act).bars.has_value()));
-            setCell(6, QStringLiteral("%1%").arg(qRound(
+            setCell(7, QStringLiteral("%1%").arg(qRound(
                                best.items.at(i + 1).pairScoreFromPrevious * 100.0)));
-            setCell(7,
+            setCell(8,
                     plan.warnings.isEmpty()
                             ? best.items.at(i + 1).explanationFromPrevious
                             : plan.warnings.join(QStringLiteral("; ")));
@@ -471,6 +476,15 @@ void DlgMusicSync::slotGenerateSequence() {
     exitEdit->setToolTip(tr("mm:ss — where this track hands over. Empty = the analysis "
                             "decides. This is how a flash is kept to 90 s (spec 9)."));
     editRow->addWidget(exitEdit);
+    editRow->addWidget(new QLabel(tr("Enter @:"), &dialog));
+    auto* entryEdit = new QLineEdit(&dialog);
+    entryEdit->setMaximumWidth(70);
+    entryEdit->setPlaceholderText(tr("auto"));
+    entryEdit->setToolTip(tr("mm:ss — where the NEXT track comes in. Empty = the analysis "
+                             "decides (it favours the low-energy intro). Set this to skip a "
+                             "long intro so the incoming groove lands while this track "
+                             "still drives."));
+    editRow->addWidget(entryEdit);
     auto* previewButton = new QPushButton(tr("Preview on decks"), &dialog);
     auto* repeatButton = new QPushButton(tr("Repeat"), &dialog);
     auto* stopButton = new QPushButton(tr("Cancel preview"), &dialog);
@@ -525,46 +539,58 @@ void DlgMusicSync::slotGenerateSequence() {
         key.targetTrackId = best.items.at(i + 1).mixxxTrackId;
         return key;
     };
-    const auto showSelection = [this, selectedRow, pairKeyAt, typeEdit, barsEdit, exitEdit]() {
-        const int row = selectedRow();
-        // setCurrentIndex fires currentIndexChanged, which would save straight
-        // back over what we just read; block while syncing the widgets.
-        const QSignalBlocker b1(typeEdit);
-        const QSignalBlocker b2(barsEdit);
-        const QSignalBlocker b3(exitEdit);
-        const bool editable = row >= 0;
-        typeEdit->setEnabled(editable);
-        barsEdit->setEnabled(editable);
-        exitEdit->setEnabled(editable);
-        if (!editable) {
-            return;
-        }
-        // Only the pair's OWN choice is shown: its act's rule is context, not
-        // something you would be editing from this row.
-        const TransitionOverride own = m_pController->loadOverrides().value(pairKeyAt(row));
-        typeEdit->setCurrentIndex(
-                typeEdit->findData(own.type ? static_cast<int>(*own.type) : -1));
-        barsEdit->setCurrentIndex(barsEdit->findData(own.bars ? *own.bars : -1));
-        exitEdit->setText(own.sourceExitMs ? msToClock(*own.sourceExitMs) : QString());
-    };
-    const auto saveSelection =
-            [this, selectedRow, pairKeyAt, typeEdit, barsEdit, exitEdit, rebuildGrid]() {
+    const auto showSelection =
+            [this, selectedRow, pairKeyAt, typeEdit, barsEdit, exitEdit, entryEdit]() {
                 const int row = selectedRow();
-                if (row < 0) {
+                // setCurrentIndex fires currentIndexChanged, which would save straight
+                // back over what we just read; block while syncing the widgets.
+                const QSignalBlocker b1(typeEdit);
+                const QSignalBlocker b2(barsEdit);
+                const QSignalBlocker b3(exitEdit);
+                const QSignalBlocker b4(entryEdit);
+                const bool editable = row >= 0;
+                typeEdit->setEnabled(editable);
+                barsEdit->setEnabled(editable);
+                exitEdit->setEnabled(editable);
+                entryEdit->setEnabled(editable);
+                if (!editable) {
                     return;
                 }
-                TransitionOverride override;
-                if (typeEdit->currentData().toInt() >= 0) {
-                    override.type = static_cast<TransitionType>(typeEdit->currentData().toInt());
-                }
-                if (barsEdit->currentData().toInt() > 0) {
-                    override.bars = barsEdit->currentData().toInt();
-                }
-                override.sourceExitMs = clockToMs(exitEdit->text());
-                const PairKey key = pairKeyAt(row);
-                m_pController->setOverride(key.sourceTrackId, key.targetTrackId, override);
-                rebuildGrid();
+                // Only the pair's OWN choice is shown: its act's rule is context, not
+                // something you would be editing from this row.
+                const TransitionOverride own = m_pController->loadOverrides().value(pairKeyAt(row));
+                typeEdit->setCurrentIndex(
+                        typeEdit->findData(own.type ? static_cast<int>(*own.type) : -1));
+                barsEdit->setCurrentIndex(barsEdit->findData(own.bars ? *own.bars : -1));
+                exitEdit->setText(own.sourceExitMs ? msToClock(*own.sourceExitMs) : QString());
+                entryEdit->setText(
+                        own.targetEntryMs ? msToClock(*own.targetEntryMs) : QString());
             };
+    const auto saveSelection = [this,
+                                       selectedRow,
+                                       pairKeyAt,
+                                       typeEdit,
+                                       barsEdit,
+                                       exitEdit,
+                                       entryEdit,
+                                       rebuildGrid]() {
+        const int row = selectedRow();
+        if (row < 0) {
+            return;
+        }
+        TransitionOverride override;
+        if (typeEdit->currentData().toInt() >= 0) {
+            override.type = static_cast<TransitionType>(typeEdit->currentData().toInt());
+        }
+        if (barsEdit->currentData().toInt() > 0) {
+            override.bars = barsEdit->currentData().toInt();
+        }
+        override.sourceExitMs = clockToMs(exitEdit->text());
+        override.targetEntryMs = clockToMs(entryEdit->text());
+        const PairKey key = pairKeyAt(row);
+        m_pController->setOverride(key.sourceTrackId, key.targetTrackId, override);
+        rebuildGrid();
+    };
     connect(grid, &QTableWidget::itemSelectionChanged, &dialog, [showSelection]() {
         showSelection();
     });
@@ -577,6 +603,9 @@ void DlgMusicSync::slotGenerateSequence() {
             &dialog,
             [saveSelection](int) { saveSelection(); });
     connect(exitEdit, &QLineEdit::editingFinished, &dialog, [saveSelection]() {
+        saveSelection();
+    });
+    connect(entryEdit, &QLineEdit::editingFinished, &dialog, [saveSelection]() {
         saveSelection();
     });
     connect(applyAct,

@@ -131,6 +131,9 @@ bool SidecarDatabase::applyMigrations() {
         case 8:
             ok = migrateToV8();
             break;
+        case 9:
+            ok = migrateToV9();
+            break;
         default:
             kLogger.warning() << "No migration defined for version" << version;
             ok = false;
@@ -246,6 +249,13 @@ bool SidecarDatabase::migrateToV4() {
         }
     }
     return true;
+}
+
+bool SidecarDatabase::migrateToV9() {
+    // Where the incoming track comes in (skip a long intro at the handover).
+    return execStatement(m_database,
+            QStringLiteral("ALTER TABLE MusicSyncTransitionOverrides "
+                           "ADD COLUMN target_entry_ms INTEGER"));
 }
 
 bool SidecarDatabase::migrateToV8() {

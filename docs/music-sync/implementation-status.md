@@ -118,6 +118,19 @@ O log dizia "5 faixas, 4 transições, tudo verde". O ouvido discordou, e estava
 - [x] **Batidas descasadas**: o handover automático funcionava e o tempo travava (+1.6%), mas as batidas entravam tortas. **Tempo e fase são problemas diferentes** e só o primeiro estava resolvido: a entrada é um milissegundo da análise e o seek caía entre batidas — sync iguala o BPM, não resgata pouso ruim. Adicionados `quantize` (antes do seek) e `beatsync_phase` (depois do play, só quando o plano pede sync). **Confirmado pelo usuário: "bem mais sincronizada".**
 - [x] **Dívida quitada**: o `PreviewExecutor` duplicava a camada de controles. Isso **já havia custado**: a correção de fase foi só para o set, e a prévia ficou com o mesmo bug. Migrado para o `DeckAdapter` (−133/+71 linhas) — a prévia herdou `quantize`/`syncPhase` **sem uma linha de correção própria**.
 
+### Fase 7a2 — ponto de entrada da faixa (Enter @)
+Simétrico ao **Exit @**, a pedido do usuário (intro longa derrubava a energia na virada):
+- [x] **`TransitionOverride::targetEntryMs`** — onde a faixa **que entra** começa. O automático já
+  preferia o ponto de baixa energia (a intro), que é justamente o que mata o clímax; agora o DJ
+  aponta um valor depois da intro. Clampeado ao comprimento da faixa (não deixa o seek passar do
+  fim). **Migration v9** (`target_entry_ms` em `MusicSyncTransitionOverrides`).
+- [x] **Um par, dois pontos**: `Exit @` (onde A sai) e `Enter @` (onde B entra) são do mesmo par —
+  a mesma linha que o **Preview on decks** toca, então os dois ajustes são ouvidos juntos. Coluna
+  **Enter @** na tabela e campo no editor. Fluxo já existente honra o valor
+  (`plan.targetEntryMs → program.targetStartMs → item.startMs → seek`).
+- [x] **Testes**: round-trip de exit+entry no repositório (independentes, sobrevivem ao reload),
+  planner honra o override e clampeia entrada fora do fim. **ctest do módulo: 80/80 verdes.**
+
 ## Próximas fases (roadmap)
 - **Fase 1 a 7** — ✅ concluídas (acima).
 - **Fase 8** — Gravação e relatórios (WAV master via Mixxx, tracklist, session-report). **→ set de 35 faixas executável e gravável.**
