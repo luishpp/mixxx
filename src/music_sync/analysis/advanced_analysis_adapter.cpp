@@ -9,7 +9,8 @@
 
 namespace mixxx::music_sync {
 
-const QString AdvancedAnalysisAdapter::kAnalyzerVersion = QStringLiteral("advanced-0.1.0");
+// 0.2.0: transition windows rank by headroom (the dip), not by stability.
+const QString AdvancedAnalysisAdapter::kAnalyzerVersion = QStringLiteral("advanced-0.2.0");
 
 EnergyCurves AdvancedAnalysisAdapter::computeCurves(
         const QVector<BandSample>& frames, int numBuckets) {
@@ -218,6 +219,18 @@ QVector<TransitionWindow> AdvancedAnalysisAdapter::computeTransitionWindows(
         const double lengthFactor =
                 std::min(1.0, static_cast<double>(bars) / kPreferredWindowBars);
 
+        // Prefer the DIP, not the steadiest groove. Two reference sets (see
+        // music-sync-ai/reference-analysis) hand over on breakdowns — ~90-96% of
+        // their energy dips coincide with the transition — and a breakdown is
+        // where the outgoing track thins out, leaving room for the incoming one
+        // to grow underneath. `energy` is normalized to the track's own peak, so
+        // headroom = how far below that peak this window sits (a breakdown/outro
+        // scores high). Stability stays as a minor guard against noisy windows,
+        // but no longer drives the choice toward mid-groove.
+        const double headroom = std::clamp(1.0 - mean, 0.0, 1.0);
+        const double rank = kWindowHeadroomWeight * headroom +
+                (1.0 - kWindowHeadroomWeight) * stability;
+
         TransitionWindow window;
         window.kind = entry ? QStringLiteral("entry") : QStringLiteral("exit");
         window.startMs = startMs;
@@ -226,7 +239,7 @@ QVector<TransitionWindow> AdvancedAnalysisAdapter::computeTransitionWindows(
         window.energy = static_cast<float>(mean);
         window.energyStability = stability;
         window.instrumentalScore = 0.5f; // vocal analysis is a later phase
-        window.confidence = static_cast<float>(stability * lengthFactor);
+        window.confidence = static_cast<float>(rank * lengthFactor);
         candidates.append(window);
     }
 

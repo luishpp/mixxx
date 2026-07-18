@@ -168,6 +168,36 @@ TEST(MusicSyncAdvancedTest, TransitionWindowsDropShortTailStub) {
     }
 }
 
+TEST(MusicSyncAdvancedTest, ExitWindowPrefersTheBreakdownDip) {
+    // Two 32-bar exit windows, equally stable, equally long: a groove at 0.6 and
+    // a breakdown at 0.2. Real sets hand over on the dip (see reference-analysis),
+    // so the low-energy window must win — the opposite of ranking by stability.
+    const std::int64_t durationMs = 300000;
+    const int n = 64;
+    QVector<float> energy(n, 0.6f);
+    // Last third is a breakdown: buckets from 240 s (80%) to the end at 0.2.
+    for (int i = static_cast<int>(240000.0 / durationMs * n); i < n; ++i) {
+        energy[i] = 0.2f;
+    }
+    QVector<mixxx::music_sync::PhraseMarker> phrases;
+    for (std::int64_t t : {180000, 210000, 240000, 270000}) {
+        phrases.append({t, 16});
+    }
+    const auto exitWindows = AdvancedAnalysisAdapter::computeTransitionWindows(
+            energy, phrases, durationMs, false);
+    ASSERT_FALSE(exitWindows.isEmpty());
+    // The window that begins the breakdown (240 s) leads, not the earlier groove.
+    EXPECT_EQ(exitWindows.first().startMs, 240000);
+    EXPECT_LT(exitWindows.first().energy, 0.4f); // it really is the dip
+
+    // With no dip (flat groove) the earliest full window wins, as before.
+    const QVector<float> flat(n, 0.6f);
+    const auto flatWindows =
+            AdvancedAnalysisAdapter::computeTransitionWindows(flat, phrases, durationMs, false);
+    ASSERT_FALSE(flatWindows.isEmpty());
+    EXPECT_EQ(flatWindows.first().startMs, 180000);
+}
+
 TEST(MusicSyncAdvancedTest, TransitionWindowsPreferLongerOverShortStable) {
     // Both candidates sit on perfectly flat (max-stability) energy; the longer
     // one must win, since a short window only looks stable for lack of samples.

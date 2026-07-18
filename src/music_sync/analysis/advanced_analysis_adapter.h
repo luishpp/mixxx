@@ -41,6 +41,12 @@ class AdvancedAnalysisAdapter {
     /// Windows merge consecutive phrases up to this length, so a 16-bar phrase
     /// grid can still yield the 32-bar transition the spec targets.
     static constexpr int kPreferredWindowBars = 32;
+    /// How much a transition window is ranked by its headroom (how far its
+    /// energy sits below the track's peak — i.e. how much it looks like a
+    /// breakdown/outro) versus its energy stability. Real sets hand over on the
+    /// dips, so headroom leads; stability is only a minor guard against noise.
+    /// See music-sync-ai/reference-analysis for the evidence.
+    static constexpr double kWindowHeadroomWeight = 0.75;
 
     /// Buckets per-frame band samples into `numBuckets` and returns per-track
     /// normalized energy (low+mid+high) and bass (low) curves plus an overall
@@ -65,9 +71,10 @@ class AdvancedAnalysisAdapter {
 
     /// Phrase-aligned candidate mixing windows. Each candidate starts on a
     /// phrase boundary and merges consecutive phrases up to kPreferredWindowBars;
-    /// candidates shorter than kMinWindowBars are dropped. Ranked by energy
-    /// stability weighted by length, so a short tail phrase (which looks
-    /// artificially stable) cannot outrank a full-length window.
+    /// candidates shorter than kMinWindowBars are dropped. Ranked by **headroom**
+    /// (how far below the track's peak the window sits — a breakdown/outro scores
+    /// high) blended with stability, all weighted by length. Real sets hand over
+    /// on the dip, not the steadiest groove, so headroom leads (kWindowHeadroomWeight).
     /// `entry` restricts the start to the first 30% of the track; otherwise the
     /// start must be in the last 40%.
     static QVector<TransitionWindow> computeTransitionWindows(

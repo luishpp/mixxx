@@ -58,9 +58,11 @@ fit* do set real do usuário ficou baixo e por que o preset de energia parece um
 > plano — é informação para escolher o preset com consciência, e uma pista de que *energy fit* talvez
 > deva pesar menno para material de platô.
 
-## Hipóteses de refinamento (a testar, não a afirmar)
+## Refinamentos
 
-- **Ancorar a janela de saída no início de um breakdown**, não na região de energia mais estável
-  (hoje `computeTransitionWindows` ranqueia por estabilidade — o oposto de um breakdown). Os sets
-  reais transicionam nas quedas.
-- **Reduzir o peso de `energy fit`** (ou torná-lo opcional) para bibliotecas de energia plana.
+- ✅ **Janela ancorada no breakdown** (implementado, `advanced-0.2.0`). `computeTransitionWindows`
+  passou a ranquear por **headroom** — quão abaixo do pico da faixa a janela está, ou seja, quão
+  parecida com um breakdown/outro ela é — em vez de por estabilidade (que empurrava para o meio do
+  groove). Peso `kWindowHeadroomWeight = 0.75`; estabilidade vira guarda menor contra ruído. Sem
+  dip claro, a janela cheia mais próxima vence, como antes.
+- ⬜ **Reduzir o peso de `energy fit`** (ou torná-lo opcional) para bibliotecas de energia plana.
