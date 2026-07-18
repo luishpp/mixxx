@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDialog>
+#include <QPointer>
 #include <QVector>
 #include <memory>
 
@@ -59,6 +60,10 @@ class DlgMusicSync : public QDialog {
     QPushButton* m_pGenerateButton;
     QTableWidget* m_pTable;
     QLabel* m_pSummaryLabel;
+    /// The generated-sequence window is modeless (Mixxx stays usable while the
+    /// set runs), so at most one is kept open at a time. QPointer self-nulls when
+    /// the dialog is destroyed (WA_DeleteOnClose).
+    QPointer<QDialog> m_pSequenceDialog;
 };
 
 } // namespace mixxx::music_sync

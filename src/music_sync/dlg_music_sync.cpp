@@ -335,18 +335,45 @@ void DlgMusicSync::slotGenerateSequence() {
     intent.energyPreset = static_cast<EnergyPreset>(m_pEnergyPreset->currentData().toInt());
     intent.maxTempoChangePercent = tempo_tolerance::kBalanced;
 
-    const QVector<Arrangement> arrangements = m_pController->generateSequences(intent);
-    if (arrangements.isEmpty()) {
+    QVector<Arrangement> arrangementsComputed = m_pController->generateSequences(intent);
+    if (arrangementsComputed.isEmpty()) {
         m_pSummaryLabel->setText(
                 tr("Need at least 2 analyzed tracks to generate a sequence."));
         return;
     }
 
-    QHash<qint64, TrackFeatures> byId;
-    for (const TrackFeatures& features : m_pController->loadSnapshots()) {
-        byId.insert(features.mixxxTrackId, features);
+    // Regenerating replaces any window already open, so two of them can never
+    // fight over the decks.
+    if (m_pSequenceDialog) {
+        m_pSequenceDialog->close(); // WA_DeleteOnClose frees it
     }
 
+    // The window is MODELESS: the set is meant to run while it is open and Mixxx
+    // must stay usable (decks, waveforms, library). A modal exec() froze the main
+    // window — the bug this fixes. Its widgets read `arrangements`/`byId` through
+    // lambdas, so that data must outlive this function: own it in a holder tied
+    // to the dialog's lifetime, freed when the dialog is destroyed.
+    auto* pDialog = new QDialog(this);
+    pDialog->setAttribute(Qt::WA_DeleteOnClose);
+    m_pSequenceDialog = pDialog;
+    QDialog& dialog = *pDialog;
+
+    struct SequenceData {
+        QVector<Arrangement> arrangements;
+        QHash<qint64, TrackFeatures> byId;
+    };
+    auto* pData = new SequenceData;
+    pData->arrangements = std::move(arrangementsComputed);
+    for (const TrackFeatures& features : m_pController->loadSnapshots()) {
+        pData->byId.insert(features.mixxxTrackId, features);
+    }
+    // No context object: the connection is scoped to the dialog itself, so it
+    // still fires if the dialog is destroyed as a child of the panel. The lambda
+    // touches only pData, so it is safe even then.
+    connect(&dialog, &QObject::destroyed, [pData]() { delete pData; });
+
+    const QVector<Arrangement>& arrangements = pData->arrangements;
+    QHash<qint64, TrackFeatures>& byId = pData->byId;
     const Arrangement& best = arrangements.first();
     const QString header =
             tr("Best of %1 alternative(s) — average compatibility %2%, energy fit %3%%4")
@@ -358,7 +385,6 @@ void DlgMusicSync::slotGenerateSequence() {
                                     : QStringLiteral("  —  ") +
                                             best.warnings.join(QStringLiteral("; ")));
 
-    QDialog dialog(this);
     dialog.setWindowTitle(tr("Generated sequence"));
     dialog.resize(1180, 700);
     auto* layout = new QVBoxLayout(&dialog);
@@ -808,13 +834,19 @@ void DlgMusicSync::slotGenerateSequence() {
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::accept);
     layout->addWidget(buttons);
-    dialog.exec();
-    // Stop any running automation if the user closes the dialog mid-preview.
-    // The set keeps running: it is meant to outlive the dialog.
-    m_pController->cancelPreview();
+
+    // Stop any running PREVIEW automation when the window closes. The SET keeps
+    // running: it is meant to outlive the window.
+    connect(&dialog, &QDialog::finished, this, [this](int) {
+        m_pController->cancelPreview();
+    });
 
     m_pSummaryLabel->setText(
             tr("Generated %1 sequence alternative(s).").arg(arrangements.size()));
+    // Modeless: return to the panel and the main window immediately.
+    dialog.show();
+    dialog.raise();
+    dialog.activateWindow();
 }
 
 void DlgMusicSync::setBusy(bool busy) {

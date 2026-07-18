@@ -176,6 +176,10 @@ diálogo de resultado.
 
 ## O diálogo "Generated sequence"
 
+> A janela é **modeless**: ela fica aberta *ao lado* do Mixxx, que continua usável (decks,
+> waveforms, biblioteca) enquanto o set roda. Fechá-la **não para o set** — só encerra qualquer
+> *preview* em andamento. Gerar de novo substitui a janela aberta (nunca há duas).
+
 Cabeçalho: `Best of N alternative(s) — average compatibility X%, energy fit Y%`.
 
 Abaixo, **uma linha por faixa**:
