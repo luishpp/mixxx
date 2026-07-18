@@ -123,11 +123,17 @@ Simétrico ao **Exit @**, a pedido do usuário (intro longa derrubava a energia 
 - [x] **`TransitionOverride::targetEntryMs`** — onde a faixa **que entra** começa. O automático já
   preferia o ponto de baixa energia (a intro), que é justamente o que mata o clímax; agora o DJ
   aponta um valor depois da intro. Clampeado ao comprimento da faixa (não deixa o seek passar do
-  fim). **Migration v9** (`target_entry_ms` em `MusicSyncTransitionOverrides`).
-- [x] **Um par, dois pontos**: `Exit @` (onde A sai) e `Enter @` (onde B entra) são do mesmo par —
-  a mesma linha que o **Preview on decks** toca, então os dois ajustes são ouvidos juntos. Coluna
-  **Enter @** na tabela e campo no editor. Fluxo já existente honra o valor
-  (`plan.targetEntryMs → program.targetStartMs → item.startMs → seek`).
+  fim). **Migration v9** (`target_entry_ms` em `MusicSyncTransitionOverrides`). Fluxo já existente
+  honra o valor (`plan.targetEntryMs → program.targetStartMs → item.startMs → seek`, no
+  `beginTransition`).
+- [x] **UI track-centric** (achado em teste real): a primeira versão era *transition-centric* — o
+  `Enter @` da linha era onde a **próxima** faixa entrava, guardado no par de saída da linha. O
+  usuário leu, com razão, como *"onde a faixa DESTA linha entra"*: ajustou o Enter @ da Innerbloom
+  esperando que ela pulasse a intro, mas o valor foi parar no BONDI, e a Innerbloom começou do
+  0:00. Corrigido: **cada linha é uma faixa** e o `Enter @` dela é o ponto de entrada dela
+  (guardado no par de **entrada**, `i-1 → i`); `Exit @`/`Transition`/`Bars` continuam no par de
+  **saída** (`i → i+1`). Editor grava nos dois pares via read-modify-write (um não apaga o outro).
+  Abertura sem Enter @; fechamento sem Exit @/tipo/bars.
 - [x] **Testes**: round-trip de exit+entry no repositório (independentes, sobrevivem ao reload),
   planner honra o override e clampeia entrada fora do fim. **ctest do módulo: 80/80 verdes.**
 

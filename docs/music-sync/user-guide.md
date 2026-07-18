@@ -190,13 +190,15 @@ Abaixo, **uma linha por faixa**:
 | **Act** | o ato (1–7); `—` = extra, toca no fim |
 | **Track** | artista - título, `[locked]` se for âncora presa |
 | **Exit @** | onde **esta** faixa entrega para a próxima (editável) |
-| **Enter @** | onde a **próxima** faixa entra (mm:ss) — para pular uma intro longa (editável) |
+| **Enter @** | onde **esta** faixa entra (mm:ss) — para pular uma intro longa (editável) |
 | **Transition** | o tipo escolhido, com a origem: `(pair)`, `(act)` ou nada = automático |
 | **Bars** | duração da transição, mesma marcação de origem |
 | **Match** | o PairScore da passagem para a próxima (harmonia, tempo, frase, energia, janela) |
 | **Plan** | a explicação — ou os **avisos**, se houver |
 
-A **última linha** mostra `—` nas colunas de transição: ela não entrega para ninguém.
+A **última linha** mostra `—` em Exit @/Transition/Bars: ela não entrega para ninguém (mas o
+**Enter @** dela é real). A **primeira linha** mostra `—` em **Enter @**: a abertura não entra por
+uma transição — ela simplesmente começa.
 
 O `(pair)` / `(act)` existe para você responder *"por que isto virou Cut?"* olhando, sem abrir o
 código.
@@ -259,19 +261,23 @@ impedir: **você mandou**.
 - **Exit @** (mm:ss, vazio = automático) — **onde esta faixa entrega**. É o que controla **quanto
   tempo a faixa toca**: o §9 pede *"flashes de 90 segundos a 3 minutos"*, e isso é impossível
   enquanto a saída for a que a análise achou. Ponha `1:30` num flash e ele vira um flash.
-- **Enter @** (mm:ss, vazio = automático) — **onde a próxima faixa entra**. O automático prefere um
+- **Enter @** (mm:ss, vazio = automático) — **onde ESTA faixa entra**. O automático prefere um
   ponto de baixa energia (a intro), o que numa faixa de **intro longa derruba a energia bem na
-  virada**. Aponte um valor depois da intro (ex.: `0:48`) e o groove novo já entra por baixo
-  enquanto a faixa que sai ainda está batendo — mantém o clímax entre faixas.
+  virada**. Selecione a **própria faixa** e aponte um valor depois da intro (ex.: `0:48`): ela passa
+  a entrar já batendo, enquanto a faixa anterior ainda está tocando — mantém o clímax entre faixas.
 
-Ambos os pontos são do **par** (a linha selecionada) e independentes: **Exit @** é onde **A** sai,
-**Enter @** é onde **B** entra. O **Preview on decks** toca exatamente esse par, então dá para
-ouvir os dois ajustes juntos. *"Bass Swap, você escolhe o tamanho"*, *"64 compassos"*, *"sai mais
-cedo"* e *"a próxima entra depois da intro"* são todas respostas válidas e combináveis.
+Cada linha é **uma faixa**, e os campos são todos sobre ela: **Enter @** = onde ela **entra**;
+**Exit @** = onde ela **entrega**; **Transition/Bars** = como ela **passa para a próxima**. Assim,
+para pular a intro da *Innerbloom*, você seleciona a linha da *Innerbloom* e mexe no **Enter @**
+dela — não na linha de cima. *"Bass Swap, você escolhe o tamanho"*, *"64 compassos"*, *"sai mais
+cedo"* e *"entra depois da intro"* são todas respostas válidas e combináveis.
 
-> **Achar a faixa de intro longa:** ela é a **próxima** faixa de alguma transição. Selecione a
-> linha **anterior** a ela (a coluna **Enter @** já mostra onde ela entra hoje) e ajuste o
-> **Enter @** dessa linha.
+> **Enter @ na abertura fica desabilitado:** a primeira faixa não entra por uma transição, então
+> não há onde guardar o ponto — ela começa do início (ou do Exit @ da anterior, quando há).
+>
+> **Preview on decks** toca a transição de **saída** da faixa selecionada (ela → a próxima). Para
+> ouvir *onde uma faixa entra*, dê Preview na **linha de cima** (a transição que traz essa faixa):
+> a incoming pousa exatamente no **Enter @** mostrado na linha dela.
 
 ##### Acelerar (ou alongar) uma transição
 
