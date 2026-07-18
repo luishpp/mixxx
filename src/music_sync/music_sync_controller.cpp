@@ -411,6 +411,9 @@ bool MusicSyncController::runSet(const Arrangement& arrangement,
     // handover for whatever it is given, so an excerpt comes out self-contained.
     const Arrangement scoped =
             SetCompiler::scopeToActs(arrangement, byId, fromAct, toAct);
+    kLogger.info() << "runSet: acts" << fromAct << "to" << toAct << "->"
+                   << scoped.items.size() << "of" << arrangement.items.size()
+                   << "tracks in scope";
     if (scoped.items.isEmpty()) {
         kLogger.warning() << "No tracks in acts" << fromAct << "-" << toAct;
         return false;
