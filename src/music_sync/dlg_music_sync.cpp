@@ -721,15 +721,15 @@ void DlgMusicSync::slotGenerateSequence() {
                 setStatus->setText(setStateText(state) + QStringLiteral(" — ") + message);
             });
     // RF-011: say which track is going onto a deck. The executor loads one deck
-    // ahead, so this fires for the track being cued, not the one playing.
+    // ahead, so this fires for the track being cued, not the one playing. No
+    // "N of total" here: `position` counts within the running excerpt, which
+    // may be a single act, not the whole 37-track set — the state label already
+    // carries the "Playing N/<scoped>" progress.
     connect(m_pController,
             &MusicSyncController::setPositionChanged,
             &dialog,
-            [setQueue, &best](int position, const QString& what) {
-                setQueue->setText(tr("Cued %1/%2 on the free deck: %3")
-                                          .arg(position + 1)
-                                          .arg(best.items.size())
-                                          .arg(what));
+            [setQueue](int, const QString& what) {
+                setQueue->setText(tr("Cued on the free deck: %1").arg(what));
             });
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
