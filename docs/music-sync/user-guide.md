@@ -189,8 +189,8 @@ Abaixo, **uma linha por faixa**:
 | **#** | posição no set |
 | **Act** | o ato (1–7); `—` = extra, toca no fim |
 | **Track** | artista - título, `[locked]` se for âncora presa |
-| **Exit @** | onde **esta** faixa entrega para a próxima (editável) |
 | **Enter @** | onde **esta** faixa entra (mm:ss) — para pular uma intro longa (editável) |
+| **Exit @** | onde **esta** faixa entrega para a próxima (editável) |
 | **Transition** | o tipo escolhido, com a origem: `(pair)`, `(act)` ou nada = automático |
 | **Bars** | duração da transição, mesma marcação de origem |
 | **Match** | o PairScore da passagem para a próxima (harmonia, tempo, frase, energia, janela) |
@@ -231,7 +231,7 @@ sincronizam.
 A edição age na **linha selecionada** da tabela:
 
 ```
-Selected transition: [Automatic ▾]  Bars: [Automatic ▾]  Exit @: [____]  Enter @: [____]
+Selected transition: [Automatic ▾]  Bars: [Automatic ▾]  Enter @: [____]  Exit @: [____]
 ```
 
 #### O combo **Transition** — o que cada escolha faz no áudio
@@ -254,17 +254,20 @@ impedir: **você mandou**.
 > **`Automatic` não é "nenhum tipo"** — é *"decida por mim"*. É a **ausência** de escolha, e é por
 > isso que voltar para ele **apaga** o registro em vez de gravar um vazio.
 
-#### **Bars**, **Exit @** e **Enter @**
+#### **Bars**, **Enter @** e **Exit @**
+
+As colunas seguem a leitura natural da faixa: **Enter @** (quando ela começa) vem antes de
+**Exit @** (quando ela termina/entrega).
 
 - **Bars** (8/16/32/64) — o **tamanho** da transição. Automático = o preferido (32) limitado pela
   janela, com os tetos por tipo (Cut ≤ 8).
-- **Exit @** (mm:ss, vazio = automático) — **onde esta faixa entrega**. É o que controla **quanto
-  tempo a faixa toca**: o §9 pede *"flashes de 90 segundos a 3 minutos"*, e isso é impossível
-  enquanto a saída for a que a análise achou. Ponha `1:30` num flash e ele vira um flash.
 - **Enter @** (mm:ss, vazio = automático) — **onde ESTA faixa entra**. O automático prefere um
   ponto de baixa energia (a intro), o que numa faixa de **intro longa derruba a energia bem na
   virada**. Selecione a **própria faixa** e aponte um valor depois da intro (ex.: `0:48`): ela passa
   a entrar já batendo, enquanto a faixa anterior ainda está tocando — mantém o clímax entre faixas.
+- **Exit @** (mm:ss, vazio = automático) — **onde esta faixa entrega**. É o que controla **quanto
+  tempo a faixa toca**: o §9 pede *"flashes de 90 segundos a 3 minutos"*, e isso é impossível
+  enquanto a saída for a que a análise achou. Ponha `1:30` num flash e ele vira um flash.
 
 Cada linha é **uma faixa**, e os campos são todos sobre ela: **Enter @** = onde ela **entra**;
 **Exit @** = onde ela **entrega**; **Transition/Bars** = como ela **passa para a próxima**. Assim,

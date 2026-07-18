@@ -379,7 +379,7 @@ void DlgMusicSync::slotGenerateSequence() {
     auto* grid = new QTableWidget(&dialog);
     grid->setColumnCount(9);
     grid->setHorizontalHeaderLabels(QStringList()
-            << tr("#") << tr("Act") << tr("Track") << tr("Exit @") << tr("Enter @")
+            << tr("#") << tr("Act") << tr("Track") << tr("Enter @") << tr("Exit @")
             << tr("Transition") << tr("Bars") << tr("Match") << tr("Plan"));
     grid->setRowCount(best.items.size());
     grid->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -415,16 +415,17 @@ void DlgMusicSync::slotGenerateSequence() {
                             .arg(dashIfEmpty(a.artist),
                                     a.title.isEmpty() ? dashIfEmpty(a.artist) : a.title,
                                     best.items.at(i).locked ? tr("  [locked]") : QString()));
-            // Enter @ (where THIS track comes in). The opener has no incoming
-            // transition — it just starts — so it shows nothing.
-            setCell(4,
+            // Enter @ (where THIS track comes in) comes before Exit @ (where it
+            // hands over): the same track, read start-to-finish. The opener has no
+            // incoming transition — it just starts — so it shows nothing.
+            setCell(3,
                     incomingEntryMs
                             ? msToClock(*incomingEntryMs) + origin(incomingEntryFromPair, false)
                             : QStringLiteral("—"));
             if (i + 1 >= best.items.size()) {
                 // The closer hands over to nobody: no exit/type/bars to plan or
                 // edit (but its Enter @, set just above, is real).
-                setCell(3, QStringLiteral("—"));
+                setCell(4, QStringLiteral("—"));
                 for (int column = 5; column < 9; ++column) {
                     setCell(column, QStringLiteral("—"));
                 }
@@ -438,7 +439,7 @@ void DlgMusicSync::slotGenerateSequence() {
                     OverrideRepository::resolve(pairs, actRules, key, a.act);
             const TransitionPlan plan = TransitionPlanner::plan(a, b, intent, resolved);
 
-            setCell(3, msToClock(plan.sourceExitMs));
+            setCell(4, msToClock(plan.sourceExitMs));
             setCell(5,
                     transitionTypeName(plan.type) +
                             origin(pairs.value(key).type.has_value(),
@@ -481,13 +482,6 @@ void DlgMusicSync::slotGenerateSequence() {
         barsEdit->addItem(QString::number(bars), bars);
     }
     editRow->addWidget(barsEdit);
-    editRow->addWidget(new QLabel(tr("Exit @:"), &dialog));
-    auto* exitEdit = new QLineEdit(&dialog);
-    exitEdit->setMaximumWidth(70);
-    exitEdit->setPlaceholderText(tr("auto"));
-    exitEdit->setToolTip(tr("mm:ss — where this track hands over. Empty = the analysis "
-                            "decides. This is how a flash is kept to 90 s (spec 9)."));
-    editRow->addWidget(exitEdit);
     editRow->addWidget(new QLabel(tr("Enter @:"), &dialog));
     auto* entryEdit = new QLineEdit(&dialog);
     entryEdit->setMaximumWidth(70);
@@ -497,6 +491,13 @@ void DlgMusicSync::slotGenerateSequence() {
                              "long intro so this track's groove lands while the previous one "
                              "is still driving. Disabled on the opener (it just starts)."));
     editRow->addWidget(entryEdit);
+    editRow->addWidget(new QLabel(tr("Exit @:"), &dialog));
+    auto* exitEdit = new QLineEdit(&dialog);
+    exitEdit->setMaximumWidth(70);
+    exitEdit->setPlaceholderText(tr("auto"));
+    exitEdit->setToolTip(tr("mm:ss — where this track hands over. Empty = the analysis "
+                            "decides. This is how a flash is kept to 90 s (spec 9)."));
+    editRow->addWidget(exitEdit);
     auto* previewButton = new QPushButton(tr("Preview on decks"), &dialog);
     auto* repeatButton = new QPushButton(tr("Repeat"), &dialog);
     auto* stopButton = new QPushButton(tr("Cancel preview"), &dialog);
