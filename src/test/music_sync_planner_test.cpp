@@ -265,6 +265,18 @@ TEST(MusicSyncTransitionTest, ClashingKeyBecomesABreakdownSwapNotACut) {
     EXPECT_FALSE(p.ramps.isEmpty());
 }
 
+TEST(MusicSyncTransitionTest, CutWithMatchingTempoStillBeatSyncs) {
+    // Weightless (130) -> Gravity (127) in the real set: a key clash forces a cut,
+    // but the 2.3% tempo gap means the cut should still lock and phase-align so it
+    // lands on the beat. Keying sync off the type made this come in off-beat.
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 130.0, QStringLiteral("6B"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 127.0, QStringLiteral("10A"), 0.60);
+    const TransitionPlan p = TransitionPlanner::plan(a, b, intent);
+    EXPECT_EQ(p.type, TransitionType::CutOnPhrase); // no sections to land in
+    EXPECT_TRUE(p.beatSync);                        // tempos agree, so it locks
+}
+
 TEST(MusicSyncTransitionTest, BreakdownSwapForATempoGapDoesNotSync) {
     // Same landing zone, but chosen because the tempo moves: locking would drag
     // the incoming track to a foreign tempo.

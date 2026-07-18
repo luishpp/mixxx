@@ -9,8 +9,9 @@
 
 namespace mixxx::music_sync {
 
-// 0.2.0: transition windows rank by headroom (the dip), not by stability.
-const QString AdvancedAnalysisAdapter::kAnalyzerVersion = QStringLiteral("advanced-0.2.0");
+// 0.2.1: exit window is PICKED by headroom (the dip) but its confidence stays
+// stability×length, so a usable groove no longer drops the pair to Crossfade.
+const QString AdvancedAnalysisAdapter::kAnalyzerVersion = QStringLiteral("advanced-0.2.1");
 
 EnergyCurves AdvancedAnalysisAdapter::computeCurves(
         const QVector<BandSample>& frames, int numBuckets) {
@@ -171,7 +172,17 @@ QVector<TransitionWindow> AdvancedAnalysisAdapter::computeTransitionWindows(
     const double entryMaxMs = 0.30 * durationMs;
     const double exitMinMs = 0.60 * durationMs;
 
-    QVector<TransitionWindow> candidates;
+    // Selection and confidence are different questions, and conflating them was
+    // a bug: ranking by headroom also dragged the stored confidence down, so a
+    // perfectly usable high-energy groove scored ~0.3 and chooseType's 0.5 gate
+    // dropped the pair to a plain Crossfade. So: PICK by headroom (prefer the
+    // dip), but STORE confidence as stability×length (is this a usable mixing
+    // point at all — a stable window is, breakdown or not).
+    struct Candidate {
+        TransitionWindow window;
+        double selectionScore = 0.0;
+    };
+    QVector<Candidate> candidates;
     for (int p = 0; p < phrases.size(); ++p) {
         const std::int64_t startMs = phrases[p].startMs;
         if (entry && static_cast<double>(startMs) > entryMaxMs) {
@@ -219,17 +230,16 @@ QVector<TransitionWindow> AdvancedAnalysisAdapter::computeTransitionWindows(
         const double lengthFactor =
                 std::min(1.0, static_cast<double>(bars) / kPreferredWindowBars);
 
-        // Prefer the DIP, not the steadiest groove. Two reference sets (see
+        // SELECTION: prefer the DIP. Two reference sets (see
         // music-sync-ai/reference-analysis) hand over on breakdowns — ~90-96% of
-        // their energy dips coincide with the transition — and a breakdown is
-        // where the outgoing track thins out, leaving room for the incoming one
-        // to grow underneath. `energy` is normalized to the track's own peak, so
-        // headroom = how far below that peak this window sits (a breakdown/outro
-        // scores high). Stability stays as a minor guard against noisy windows,
-        // but no longer drives the choice toward mid-groove.
+        // their energy dips coincide with the transition — because a breakdown is
+        // where the outgoing track thins out, leaving room for the incoming one.
+        // `energy` is normalized to the track's own peak, so headroom = how far
+        // below that peak the window sits (a breakdown/outro scores high).
         const double headroom = std::clamp(1.0 - mean, 0.0, 1.0);
-        const double rank = kWindowHeadroomWeight * headroom +
-                (1.0 - kWindowHeadroomWeight) * stability;
+        const double selectionScore = lengthFactor *
+                (kWindowHeadroomWeight * headroom +
+                        (1.0 - kWindowHeadroomWeight) * stability);
 
         TransitionWindow window;
         window.kind = entry ? QStringLiteral("entry") : QStringLiteral("exit");
@@ -239,20 +249,23 @@ QVector<TransitionWindow> AdvancedAnalysisAdapter::computeTransitionWindows(
         window.energy = static_cast<float>(mean);
         window.energyStability = stability;
         window.instrumentalScore = 0.5f; // vocal analysis is a later phase
-        window.confidence = static_cast<float>(rank * lengthFactor);
-        candidates.append(window);
+        // CONFIDENCE: usability, not preference. A stable, full-length window is
+        // a usable mixing point whatever its energy, so this stays stability×
+        // length — the value chooseType's gate was tuned against.
+        window.confidence = static_cast<float>(stability * lengthFactor);
+        candidates.append({window, selectionScore});
     }
 
     std::sort(candidates.begin(),
             candidates.end(),
-            [](const TransitionWindow& a, const TransitionWindow& b) {
-                if (a.confidence != b.confidence) {
-                    return a.confidence > b.confidence;
+            [](const Candidate& a, const Candidate& b) {
+                if (a.selectionScore != b.selectionScore) {
+                    return a.selectionScore > b.selectionScore;
                 }
-                return a.startMs < b.startMs; // deterministic tie-break
+                return a.window.startMs < b.window.startMs; // deterministic
             });
     for (int i = 0; i < candidates.size() && i < kMaxTransitionWindows; ++i) {
-        out.append(candidates[i]);
+        out.append(candidates[i].window);
     }
     return out;
 }

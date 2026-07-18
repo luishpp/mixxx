@@ -220,14 +220,15 @@ TransitionPlan TransitionPlanner::plan(const TrackFeatures& from,
     const double beatMs = plan.targetBpm > 0.0 ? 60000.0 / plan.targetBpm : 500.0;
     plan.durationMs = static_cast<std::int64_t>(plan.durationBeats * beatMs);
 
-    // Tempo-lock only when the decks actually overlap AND the tempos are close
-    // enough to lock without stretching. A breakdown swap picked for a key clash
-    // still wants sync (the tempos agree); one picked for a tempo gap must not.
+    // Beat-sync is about whether the TEMPOS match, not the transition type. A
+    // cut chosen for a key clash between two ~like-tempo tracks should still lock
+    // and phase-align, so the brief swap lands on the beat; a cut across a real
+    // tempo gap must not, since syncing would drag the incoming track. Keying
+    // this off the type made every cut abrupt even when the tempos agreed
+    // (Weightless 130 -> Gravity 127 came in off-beat despite a 2.3% gap).
     const double tempoPct =
             (from.bpm > 0.0) ? std::abs(to.bpm - from.bpm) / from.bpm * 100.0 : 100.0;
-    plan.beatSync = plan.type != TransitionType::CutOnPhrase &&
-            plan.type != TransitionType::AutoDjFallback &&
-            tempoPct <= maxTempoPct * 1.6;
+    plan.beatSync = tempoPct <= maxTempoPct * 1.6;
 
     buildAutomation(plan);
 
