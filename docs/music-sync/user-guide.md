@@ -262,6 +262,28 @@ impedir: **você mandou**.
 Os três são independentes: *"Bass Swap, você escolhe o tamanho"*, *"como quiser, mas 64
 compassos"* e *"só sai mais cedo"* são todas respostas válidas.
 
+##### Acelerar (ou alongar) uma transição
+
+A velocidade de uma transição é o **Bars** — quantos compassos ela leva. **Menos compassos =
+mais rápida.** O **tipo** também muda o caráter.
+
+| Quero… | Bars | Tipo | Resultado |
+|---|---|---|---|
+| **Corte seco imediato** | 8 | Cut on phrase | troca na frase, sem mescla |
+| **Mescla rápida** | 8–16 | EQ Blend | os graves trocam depressa; boa para flashes/peak |
+| **Transição padrão** | 32 | Automatic | o equilíbrio do motor |
+| **Mescla longa e suave** | 64 | EQ Blend / Breakdown swap | progressive/melodic, entra devagar |
+
+**Como fazer:** selecione a linha na tabela → escolha **Bars** (ex.: `8`) e, se quiser, o **Tipo**
+→ ouça com **Preview on decks**. Para acelerar **um ato inteiro** (ex.: todos os flashes do Ato 4),
+use **Rule for act** com `Bars = 16` e **Apply to act**, em vez de linha por linha.
+
+> **Exit @ não acelera** — ele muda *onde* a transição começa (e quanto a faixa toca antes de
+> entregar), não a velocidade. Para adiantar a virada, use Exit @; para encurtá-la, use Bars.
+
+> **Limite físico:** se você pedir mais compassos do que cabem antes da faixa acabar, o relatório
+> apara e avisa (`… trimmed to N`). Acelerar (Bars menor) nunca esbarra nisso.
+
 **A sua escolha de duração vence as heurísticas.** O limite da janela e o teto de 8 compassos do
 Cut são *gosto do planejador* — você acaba de passar por cima. **Só a física ainda discute**: se a
 transição não couber antes da faixa acabar, ela é aparada e o relatório **avisa**. Sair da janela
