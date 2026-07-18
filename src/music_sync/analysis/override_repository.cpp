@@ -164,4 +164,28 @@ int OverrideRepository::clear() {
     return before;
 }
 
+int OverrideRepository::clearActRules() {
+    QSqlQuery count(m_database);
+    int before = 0;
+    if (count.exec(QStringLiteral("SELECT COUNT(*) FROM MusicSyncActOverrides")) &&
+            count.next()) {
+        before = count.value(0).toInt();
+    }
+    QSqlQuery query(m_database);
+    if (!query.exec(QStringLiteral("DELETE FROM MusicSyncActOverrides"))) {
+        kLogger.warning() << "Could not clear act rules:" << query.lastError();
+        return -1;
+    }
+    return before;
+}
+
+int OverrideRepository::resetAll() {
+    const int pairs = clear();
+    const int acts = clearActRules();
+    if (pairs < 0 || acts < 0) {
+        return -1;
+    }
+    return pairs + acts;
+}
+
 } // namespace mixxx::music_sync

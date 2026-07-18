@@ -114,6 +114,11 @@ class MusicSyncController : public QObject {
     QHash<int, TransitionOverride> loadActRules() const;
     bool setActRule(int act, const TransitionOverride& rule);
 
+    /// Forgets every transition edit — per-pair choices and act rules — back to
+    /// fully automatic. Returns how many were removed, or -1. Snapshots are not
+    /// touched (Clear snapshots handles those).
+    int resetTransitionEdits();
+
     /// What actually applies to a pair, pair over act — the same resolution the
     /// preview and the set use, so the panel never shows a different answer.
     TransitionOverride resolvedOverride(

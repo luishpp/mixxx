@@ -502,6 +502,11 @@ void DlgMusicSync::slotGenerateSequence() {
     actRow->addWidget(actBars);
     auto* applyAct = new QPushButton(tr("Apply to act"), &dialog);
     actRow->addWidget(applyAct);
+    auto* resetEdits = new QPushButton(tr("Reset all edits"), &dialog);
+    resetEdits->setToolTip(
+            tr("Sets every transition back to Automatic — all pair choices and act "
+               "rules. Snapshots are not affected."));
+    actRow->addWidget(resetEdits);
     actRow->addStretch(1);
     layout->addLayout(actRow);
 
@@ -593,6 +598,27 @@ void DlgMusicSync::slotGenerateSequence() {
                                 : tr("Act %1 rule applied — pairs with their own "
                                      "choice keep it.")
                                           .arg(act));
+            });
+    connect(resetEdits,
+            &QPushButton::clicked,
+            &dialog,
+            [this, &dialog, rebuildGrid, showSelection, previewStatus]() {
+                if (QMessageBox::question(&dialog,
+                            tr("Reset all edits"),
+                            tr("Set every transition back to Automatic?\n\nThis clears all "
+                               "pair choices and act rules. Your snapshots and the "
+                               "generated order are not affected."),
+                            QMessageBox::Yes | QMessageBox::No,
+                            QMessageBox::No) != QMessageBox::Yes) {
+                    return;
+                }
+                const int removed = m_pController->resetTransitionEdits();
+                rebuildGrid();
+                showSelection();
+                previewStatus->setText(removed < 0
+                                ? tr("Could not reset the edits.")
+                                : tr("Reset %1 edit(s) — everything is Automatic again.")
+                                          .arg(removed));
             });
     connect(previewButton,
             &QPushButton::clicked,

@@ -472,6 +472,13 @@ bool MusicSyncController::setActRule(int act, const TransitionOverride& rule) {
     return OverrideRepository(m_pDatabase->database()).saveActRule(act, rule);
 }
 
+int MusicSyncController::resetTransitionEdits() {
+    if (!m_pDatabase) {
+        return -1;
+    }
+    return OverrideRepository(m_pDatabase->database()).resetAll();
+}
+
 TransitionOverride MusicSyncController::resolvedOverride(
         std::int64_t sourceTrackId, std::int64_t targetTrackId, int act) const {
     PairKey key;

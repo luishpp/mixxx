@@ -256,4 +256,28 @@ TEST(MusicSyncOverrideRepositoryTest, ChoicesFollowThePairNotThePosition) {
     EXPECT_FALSE(loaded.contains(reversed));
 }
 
+TEST(MusicSyncOverrideRepositoryTest, ResetAllForgetsPairsAndActRules) {
+    QTemporaryDir tempDir;
+    ASSERT_TRUE(tempDir.isValid());
+    SidecarDatabase db(tempDir.filePath(QStringLiteral("music-sync-dj.sqlite")));
+    ASSERT_TRUE(db.open());
+    ASSERT_TRUE(db.applyMigrations());
+    OverrideRepository repo(db.database());
+
+    TransitionOverride pairChoice;
+    pairChoice.type = TransitionType::BassSwap;
+    ASSERT_TRUE(repo.save(PairKey{1, 2}, pairChoice));
+    TransitionOverride actRule;
+    actRule.bars = 16;
+    ASSERT_TRUE(repo.saveActRule(1, actRule));
+    ASSERT_FALSE(repo.loadAll().isEmpty());
+    ASSERT_FALSE(repo.loadActRules().isEmpty());
+
+    EXPECT_EQ(repo.resetAll(), 2); // one pair + one act
+    EXPECT_TRUE(repo.loadAll().isEmpty());
+    EXPECT_TRUE(repo.loadActRules().isEmpty());
+
+    EXPECT_EQ(repo.resetAll(), 0); // idempotent
+}
+
 } // namespace

@@ -283,6 +283,16 @@ compassos** — o tipo dele, os compassos do ato.
 Aplicar uma regra **não apaga** os ajustes de par: eles continuam vencendo. Para zerar um ato,
 escolha `Automatic`/`Automatic` e **Apply to act**.
 
+#### Voltar tudo ao automático
+
+O botão **Reset all edits** (na linha da regra de ato) devolve **todas** as transições ao
+**Automatic** de uma vez — apaga os overrides de par **e** as regras de ato. Pede confirmação.
+
+> **Por que Generate sequence e Read native analysis não fazem isso.** São dois armazéns
+> diferentes: *Clear snapshots* limpa o **cache de análise**; *Reset all edits* limpa as **suas
+> escolhas**. Regenerar a sequência ou reler a biblioteca **nunca** mexe nas suas escolhas — de
+> propósito, para você não perder um ajuste só porque recalculou. O reset é o caminho explícito.
+
 > **A escolha fica colada no _par de faixas_, não na posição** (sidecar). Rodar
 > *Generate sequence* de novo reordena posições — um ajuste preso à "posição 7" reapareceria em
 > cima de **outro par**.

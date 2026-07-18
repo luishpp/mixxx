@@ -42,8 +42,15 @@ class OverrideRepository {
     /// not a choice to store.
     bool save(const PairKey& key, const TransitionOverride& override);
 
-    /// Forgets every choice. Returns how many were removed, or -1 on failure.
+    /// Forgets every per-pair choice. Returns how many were removed, or -1.
     int clear();
+
+    /// Forgets every act-wide rule. Returns how many were removed, or -1.
+    int clearActRules();
+
+    /// Forgets everything the DJ edited — pair choices and act rules alike.
+    /// Returns how many rows were removed in total, or -1 on failure.
+    int resetAll();
 
     // --- Act-wide rules (spec 16 thinks in blocks) ---
 
