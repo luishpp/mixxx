@@ -108,6 +108,7 @@ void SetExecutor::start(const SetProgram& program, const QVector<TrackPointer>& 
     m_current = 0;
     m_nextWrite = 0;
     m_preparedUpTo = -1;
+    m_cuedSeekedUpTo = -1;
 
     setState(State::Preparing, QStringLiteral("Loading the first tracks"));
     prepare(0);
@@ -134,6 +135,23 @@ void SetExecutor::onTick() {
     const SetItem& item = m_program.items.at(m_current);
 
     if (m_state == State::Playing) {
+        // Pre-position the deck waiting in the wings at its own entry point, so
+        // the DJ can see where it will come in instead of it sitting at 0:00
+        // through the whole track (RF-011). Done once, after it finishes loading;
+        // beginTransition re-seeks it anyway, so this is purely for confidence and
+        // never fights a scrub the DJ makes afterwards.
+        const int nextPos = m_current + 1;
+        if (nextPos < m_program.items.size() && nextPos > m_cuedSeekedUpTo) {
+            DeckAdapter* pNext = deckFor(nextPos);
+            const SetItem& next = m_program.items.at(nextPos);
+            if (pNext && pNext->isLoaded() && !pNext->isPlaying() && next.durationMs > 0) {
+                pNext->setQuantize(true);
+                pNext->seek(std::clamp(
+                        static_cast<double>(next.startMs) / next.durationMs, 0.0, 1.0));
+                m_cuedSeekedUpTo = nextPos;
+            }
+        }
+
         // Seek and start the live track once its deck is actually loaded.
         if (!pLive->isPlaying()) {
             if (!pLive->isLoaded()) {

@@ -137,6 +137,18 @@ Simétrico ao **Exit @**, a pedido do usuário (intro longa derrubava a energia 
 - [x] **Testes**: round-trip de exit+entry no repositório (independentes, sobrevivem ao reload),
   planner honra o override e clampeia entrada fora do fim. **ctest do módulo: 80/80 verdes.**
 
+### Fase 7a3 — deck em espera pré-posicionada no Enter @
+Achado em teste real: o Preview e o Run set pareciam discordar. O log provou o contrário — no Run
+set do Ato 2, `Transition 1 -> 2 "Bass Swap"` disparou 3:44 após o início, exatamente no `Exit @`
+(3:35) da faixa. Exit/Enter/tipo **estavam** sendo aplicados; a diferença era só de apresentação:
+- O **Preview** (`cueDecks`) salta as duas decks para os pontos da transição e toca o trecho, então
+  tudo aparece posicionado na hora. O **Run set** toca a faixa desde o começo até o `Exit @`, e a
+  faixa que entra ficava parada em 0:00 até a virada — o que dava a impressão de "não aplicado".
+- [x] **Correção de confiança:** o `SetExecutor` agora **pré-posiciona a deck em espera no `Enter @`**
+  assim que ela termina de carregar (`onTick`, guardado por `m_cuedSeekedUpTo`, uma vez por
+  posição). O `beginTransition` continua re-buscando o ponto na virada (autoritativo), então isto é
+  puramente visual e nunca briga com um scrub do DJ. Testes do módulo: 80/80.
+
 ## Próximas fases (roadmap)
 - **Fase 1 a 7** — ✅ concluídas (acima).
 - **Fase 8** — Gravação e relatórios (WAV master via Mixxx, tracklist, session-report). **→ set de 35 faixas executável e gravável.**

@@ -97,7 +97,8 @@ class SetExecutor : public QObject {
     int m_nextWrite = 0;     // index into the running transition's writes
     double m_startPos01 = 0.0;
     double m_refBpm = 0.0;
-    int m_preparedUpTo = -1; // highest position already loaded/cued
+    int m_preparedUpTo = -1;    // highest position already loaded/cued
+    int m_cuedSeekedUpTo = -1;  // highest position pre-seeked to its entry point
     double m_lastCrossfaderSet = 0.0;
 };
 

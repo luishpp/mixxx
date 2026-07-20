@@ -353,6 +353,14 @@ entregar para uma faixa que não está nele.
 *Manual override* e devolve os decks. O set **continua tocando se você fechar o diálogo** — só a
 prévia é cancelada.
 
+> **Run set vs. Preview — os pontos são os mesmos, o que muda é o *quando*.** O **Preview** salta as
+> duas decks na hora para os pontos da transição (Exit @ e Enter @) e toca só aquele trecho. O
+> **Run set** toca a faixa desde o começo e só faz a virada quando ela **chega** no Exit @ — aí a
+> próxima entra no Enter @ dela. A faixa que espera fica **pré-posicionada no Enter @** assim que
+> carrega (não em 0:00), para você ver onde ela vai entrar; a virada re-confirma o ponto de qualquer
+> forma. Se a transição parece "não ter aplicado" o ponto, veja no log a linha
+> `Transition N -> M "<tipo>"` — o horário dela bate com o Exit @.
+
 - **Preview on decks**: carrega A no deck 1 e B no deck 2, posiciona nos pontos planejados e
   executa a automação (crossfader/volumes/EQ) guiada pela **posição de reprodução** do deck A —
   não por relógio.
