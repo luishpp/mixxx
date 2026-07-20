@@ -15,8 +15,8 @@ Numa biblioteca nova, use nesta ordem:
 1. **Analyze missing (Mixxx)** — só se houver faixas sem BPM/tom. Espere terminar (ele já re-snapshota sozinho).
 2. **Read native analysis from library** — calcula tudo e grava no sidecar.
 3. **Generate sequence**.
-4. No diálogo: escolha um par → **Preview on decks** para ouvir; ajuste **Transition/Bars** se
-   quiser; **Run set** para tocar o set (ou só um ato).
+4. No diálogo: selecione uma faixa → **Preview on decks** ouve **como ela entra**; ajuste
+   **Enter @ / Exit @ / Transition / Bars**; **Run set** para tocar o set (ou só um ato).
 
 > **Depois de atualizar o módulo (novo build), clique em "Read native analysis from library".**
 > As janelas/seções ficam **gravadas** no sidecar e o painel só as relê ao abrir — com as regras
@@ -262,9 +262,11 @@ cedo"* e *"entra depois da intro"* são todas respostas válidas e combináveis.
 > **Enter @ na abertura fica desabilitado:** a primeira faixa não entra por uma transição, então
 > não há onde guardar o ponto — ela começa do início (ou do Exit @ da anterior, quando há).
 >
-> **Preview on decks** toca a transição de **saída** da faixa selecionada (ela → a próxima). Para
-> ouvir *onde uma faixa entra*, dê Preview na **linha de cima** (a transição que traz essa faixa):
-> a incoming pousa exatamente no **Enter @** mostrado na linha dela.
+> **Preview on decks** toca **como a faixa selecionada ENTRA**: ela é a que chega, então começa no
+> **Enter @** dela (0:00 se você não mexeu) e a faixa **de cima** entrega para ela. Para ouvir como
+> uma faixa **sai** (o Exit @/tipo/bars que você edita na linha dela), dê Preview na **linha de
+> baixo** — lá essa mesma transição é a "entrada" da próxima. A abertura não tem entrada, então o
+> Preview começa a valer da 2ª linha em diante.
 
 ##### Acelerar (ou alongar) uma transição
 
@@ -361,9 +363,9 @@ prévia é cancelada.
 > forma. Se a transição parece "não ter aplicado" o ponto, veja no log a linha
 > `Transition N -> M "<tipo>"` — o horário dela bate com o Exit @.
 
-- **Preview on decks**: carrega A no deck 1 e B no deck 2, posiciona nos pontos planejados e
-  executa a automação (crossfader/volumes/EQ) guiada pela **posição de reprodução** do deck A —
-  não por relógio.
+- **Preview on decks**: mostra **como a faixa selecionada entra**. A faixa **anterior** (A) vai
+  pro deck 1 no Exit @ dela, a **selecionada** (B) vai pro deck 2 no **Enter @** dela, e a automação
+  (crossfader/volumes/EQ) roda guiada pela **posição de reprodução** do deck A — não por relógio.
 - **Sync só quando faz sentido**: nas mesclas (EQ Blend, Bass Swap, Crossfade, Filter) o deck B é
   beat-matchado ao A. Em **Cut on phrase** e **Auto DJ fallback**, **não** — essas transições
   existem justamente porque os tempos são incompatíveis, e sincronizar arrastaria a faixa nova

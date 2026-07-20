@@ -508,6 +508,10 @@ void DlgMusicSync::slotGenerateSequence() {
                             "decides. This is how a flash is kept to 90 s (spec 9)."));
     editRow->addWidget(exitEdit);
     auto* previewButton = new QPushButton(tr("Preview on decks"), &dialog);
+    previewButton->setToolTip(
+            tr("Plays how the SELECTED track comes in: it starts at its own Enter @ and "
+               "the track above it hands over. To hear how a track hands OUT, select the "
+               "next row."));
     auto* repeatButton = new QPushButton(tr("Repeat"), &dialog);
     auto* stopButton = new QPushButton(tr("Cancel preview"), &dialog);
     editRow->addWidget(previewButton);
@@ -715,14 +719,18 @@ void DlgMusicSync::slotGenerateSequence() {
     connect(previewButton,
             &QPushButton::clicked,
             &dialog,
-            [this, selectedRow, &best, &byId, intent, previewStatus]() {
-                const int row = selectedRow();
-                if (row < 0) {
-                    previewStatus->setText(tr("Select a transition row first."));
+            [this, selectedTrackRow, &best, &byId, intent, previewStatus]() {
+                const int row = selectedTrackRow();
+                if (row < 1) {
+                    previewStatus->setText(tr("Pick a track below the opener — the preview "
+                                              "shows how the selected track comes in."));
                     return;
                 }
-                const TrackFeatures from = byId.value(best.items.at(row).mixxxTrackId);
-                const TrackFeatures to = byId.value(best.items.at(row + 1).mixxxTrackId);
+                // Preview how the SELECTED track comes in: it is the incoming
+                // track, so it starts at its own Enter @, and the track above it
+                // hands over. (To hear how a track hands OUT, preview the next row.)
+                const TrackFeatures from = byId.value(best.items.at(row - 1).mixxxTrackId);
+                const TrackFeatures to = byId.value(best.items.at(row).mixxxTrackId);
                 if (!m_pController->previewTransition(from, to, intent)) {
                     previewStatus->setText(tr("Preview unavailable — need two decks and "
                                               "both tracks in the library."));
