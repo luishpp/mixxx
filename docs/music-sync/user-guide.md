@@ -362,6 +362,12 @@ prévia é cancelada.
 > carrega (não em 0:00), para você ver onde ela vai entrar; a virada re-confirma o ponto de qualquer
 > forma. Se a transição parece "não ter aplicado" o ponto, veja no log a linha
 > `Transition N -> M "<tipo>"` — o horário dela bate com o Exit @.
+>
+> **A regra vale por faixa:** cada faixa **começa no Enter @** dela e **entrega no Exit @** dela
+> (testado no `SetCompiler`). A **única exceção** é a **primeira faixa do que você roda** — ela não
+> tem ninguém entregando para ela, então começa na janela de entrada automática, não num Enter @.
+> No set inteiro isso é a abertura (que nem tem Enter @); num ensaio de ato, é a primeira faixa
+> daquele ato.
 
 - **Preview on decks**: mostra **como a faixa selecionada entra**. A faixa **anterior** (A) vai
   pro deck 1 no Exit @ dela, a **selecionada** (B) vai pro deck 2 no **Enter @** dela, e a automação

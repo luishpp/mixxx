@@ -109,6 +109,39 @@ TEST(MusicSyncSetTest, EntryAndExitComeFromTheTransitions) {
     EXPECT_GT(set.items.first().playSpanMs(), 0);
 }
 
+TEST(MusicSyncSetTest, OverridesLandOnEachTracksOwnStartAndExit) {
+    // The track-centric rule the panel promises, verified end to end for Run set:
+    // a track's Enter @ is where it comes IN and its Exit @ is where it hands
+    // OVER. Enter @ of track i is stored on the pair (i-1, i); Exit @ of track i
+    // on the pair (i, i+1). The compiled program must place them on that exact
+    // track's item, or the executor would seek/hand over at the wrong spot.
+    const Fixture fx = makeFixture(3);
+
+    QHash<PairKey, TransitionOverride> overrides;
+    TransitionOverride ov12;
+    ov12.sourceExitMs = 200000; // track 1 hands over here  -> its Exit @
+    ov12.targetEntryMs = 30000; // track 2 comes in here    -> its Enter @
+    overrides.insert(PairKey{1, 2}, ov12);
+    TransitionOverride ov23;
+    ov23.sourceExitMs = 190000; // track 2 hands over here   -> its Exit @
+    ov23.targetEntryMs = 45000; // track 3 comes in here     -> its Enter @
+    overrides.insert(PairKey{2, 3}, ov23);
+
+    const SetProgram set =
+            SetCompiler::compile(fx.arrangement, fx.byId, MixIntent(), overrides);
+
+    ASSERT_EQ(set.items.size(), 3);
+    // Track 1 is the opener: nothing hands over to it, so it starts at its entry
+    // window (the one caveat — a run's first track has no Enter @ to honour).
+    EXPECT_EQ(set.items.at(0).startMs, 8000);
+    EXPECT_EQ(set.items.at(0).exitMs, 200000);  // track 1 Exit @
+    EXPECT_EQ(set.items.at(1).startMs, 30000);  // track 2 Enter @
+    EXPECT_EQ(set.items.at(1).exitMs, 190000);  // track 2 Exit @
+    EXPECT_EQ(set.items.at(2).startMs, 45000);  // track 3 Enter @
+    // The closer has no successor, so it plays out to its end.
+    EXPECT_EQ(set.items.at(2).exitMs, set.items.at(2).durationMs);
+}
+
 TEST(MusicSyncSetTest, SingleTrackHasNoTransitions) {
     const Fixture fx = makeFixture(1);
     const SetProgram set = SetCompiler::compile(fx.arrangement, fx.byId, MixIntent());
