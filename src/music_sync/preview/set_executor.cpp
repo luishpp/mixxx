@@ -256,9 +256,11 @@ void SetExecutor::beginTransition() {
     pNext->setSync(program.needsBeatSync());
     pNext->setPlaying(true);
     if (program.needsBeatSync()) {
-        // Tempo lock keeps the BPMs equal; this puts the downbeats on top of
-        // each other. Without it the two decks run at the same speed, offset.
-        pNext->syncPhase();
+        // Match TEMPO and phase to the outgoing deck, not just phase — otherwise
+        // the two BPMs stay a hair apart and drift into a flam over the blend
+        // ("samba"). This is the deck's SYNC button: set the rate to the leader
+        // and align the downbeats.
+        pNext->matchTempoAndPhase();
     }
 
     m_nextWrite = 0;

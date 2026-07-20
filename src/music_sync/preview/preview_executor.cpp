@@ -145,9 +145,11 @@ void PreviewExecutor::begin() {
     m_pSource->setPlaying(true);
     m_pTarget->setPlaying(true);
     if (beatSync) {
-        // Tempo lock equalises the BPM; this is what puts the downbeats on top
-        // of each other.
-        m_pTarget->syncPhase();
+        // Match TEMPO and phase to the source, not just phase: sync_enabled alone
+        // can leave the incoming leading at its own BPM, so the two drift into a
+        // flam ("samba"). This is the deck's SYNC button — set the rate to match,
+        // then align the downbeats.
+        m_pTarget->matchTempoAndPhase();
     }
 
     kLogger.info() << "Preview begin:"

@@ -176,6 +176,19 @@ sobreposição longa** de qualquer jeito (Breakdown swap: as duas audíveis por 
 - [x] **Testes**: par sem sync mantém a sobreposição curta (target sobe só no fim); par com sync
   ainda faz o blend ao longo do trecho. **ctest do módulo: 86/86 verdes.**
 
+### Fase 7a6 — casar o TEMPO no sync, não só a fase (samba em tempos próximos)
+Relato: samba persistia nos atos 3–5, onde os tempos são **próximos** (124–129 BPM, gaps 1–5% <
+8%) e portanto o `beatSync` fica **ligado**. Causa: no handover eu fazia `setSync(true)`
+(`sync_enabled`) + `syncPhase()` (`beatsync_phase`, **só fase**). O `sync_enabled` sozinho, sem um
+líder de sync definido, pode deixar a faixa que entra **liderando no próprio BPM** — então os dois
+tempos ficam um triz diferentes e **derivam** ~1 batida ao longo de 32 compassos → flam.
+- [x] **`DeckAdapter::matchTempoAndPhase()`** dispara `beatsync` (tempo **e** fase — o botão SYNC da
+  deck), com fallback para `beatsync_phase` se indisponível. Usado no `SetExecutor::beginTransition`
+  e no `PreviewExecutor::begin` no lugar do `syncPhase()`. Define o rate para casar, então os dois
+  ficam travados sem derivar. (Só para viradas com `beatSync=true`; nos saltos grandes segue a troca
+  apertada da 7a5.)
+- Testes do módulo seguem **86/86** (mudança é de controle de deck em runtime).
+
 ## Próximas fases (roadmap)
 - **Fase 1 a 7** — ✅ concluídas (acima).
 - **Fase 8** — Gravação e relatórios (WAV master via Mixxx, tracklist, session-report). **→ set de 35 faixas executável e gravável.**

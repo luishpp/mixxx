@@ -51,6 +51,12 @@ class DeckAdapter : public QObject {
     /// One-shot phase alignment against the other playing deck. Tempo lock alone
     /// keeps the BPM equal; this is what puts the downbeats on top of each other.
     void syncPhase();
+    /// One-shot tempo AND phase match against the other playing deck — exactly the
+    /// deck's SYNC button. Enabling sync_enabled alone is not enough: without a
+    /// sync leader the incoming deck can end up leading at its own native tempo,
+    /// so the two BPMs stay a hair apart and the beats drift into a flam over a
+    /// long blend ("samba"). This sets the rate to match, so they stay locked.
+    void matchTempoAndPhase();
     void setVolume(double volume);   // 0..1, 1 = unity
     void setEqLow(double value);     // 0 kill .. 1 unity .. 4 boost
     void setFilter(double value);    // quick effect super knob, 0..1, 0.5 neutral
@@ -70,6 +76,7 @@ class DeckAdapter : public QObject {
     ControlProxy* m_pBpm = nullptr;
     ControlProxy* m_pSyncEnabled = nullptr;
     ControlProxy* m_pSyncPhase = nullptr;
+    ControlProxy* m_pBeatSync = nullptr;
     ControlProxy* m_pQuantize = nullptr;
     ControlProxy* m_pVolume = nullptr;
     ControlProxy* m_pOrientation = nullptr;
