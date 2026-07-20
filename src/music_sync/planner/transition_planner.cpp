@@ -92,6 +92,25 @@ void buildAutomation(TransitionPlan& plan) {
     }
     plan.actions.append({QStringLiteral("targetPlay"), 0.0, 1.0});
 
+    if (!plan.beatSync) {
+        // The tempos are too far apart to lock, so a sustained blend would play
+        // two unaligned kicks at once — the "samba" flam. Keep the incoming
+        // SILENT (and bass-killed) through the transition and swap quickly at the
+        // phrase end, sweeping the outgoing out with the filter so the swap is not
+        // jarring. The two beats never overlap loud, so there is nothing to flam.
+        // (For the smoothest result, land the incoming on a beatless intro via
+        // Enter @.) This overrides the per-type blend precisely because no blend
+        // of unsynced beats sounds good.
+        const double swap = std::max(0.0, d - 2.0);
+        plan.actions.append({QStringLiteral("targetLowEq"), 0.0, 0.0});
+        plan.ramps.append({QStringLiteral("sourceFilter"), d * 0.4, d, 0.5, 1.0});
+        plan.ramps.append({QStringLiteral("targetVolume"), swap, d, 0.0, 1.0});
+        plan.ramps.append({QStringLiteral("sourceVolume"), swap, d, 1.0, 0.0});
+        plan.ramps.append({QStringLiteral("crossfader"), swap, d, -1.0, 1.0});
+        plan.actions.append({QStringLiteral("targetLowEq"), d, 1.0});
+        return;
+    }
+
     switch (plan.type) {
     case TransitionType::EqBlend:
     case TransitionType::BassSwap: {

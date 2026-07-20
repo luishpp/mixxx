@@ -177,8 +177,13 @@ Selecione a linha e mexa nos campos abaixo da tabela. **Cada linha é uma faixa,
 
 - **Bars** = tamanho da virada (8/16/32/64). **Menos = mais rápida.** Automático mira 32, limitado
   pela janela (Cut nunca passa de 8).
-- **Beat sync segue o plano, não o tipo:** quem sabe se os tempos casam é o planejador. `Cut` e
-  `Auto DJ fallback` nunca sincronizam.
+- **Beat sync segue o plano, não o tipo:** quem sabe se os tempos casam é o planejador (casam quando
+  o salto de tempo é ≤ ~8%). `Cut` e `Auto DJ fallback` nunca sincronizam.
+- **Sem sync = sobreposição curta (anti-samba):** quando os tempos são distantes demais para casar
+  (ex.: um salto pro trance), blendar as duas batidas geraria aquele *flam* ("samba"). Aí a virada
+  fica **apertada**: a faixa que entra fica **muda até uma troca rápida** no fim da frase (com o
+  filtro varrendo a que sai), então duas batidas desalinhadas nunca tocam alto juntas. Para uma
+  entrada suave nesses casos, traga a nova faixa numa **intro sem batida** via **Enter @**.
 
 > ⚠️ **Forçar o tipo errado é audível.** `Cut` num par harmônico e no mesmo tempo joga fora uma
 > mescla boa; `Bass Swap` num par com 20% de diferença de tempo estica a faixa nova (foi assim que o

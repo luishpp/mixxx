@@ -642,6 +642,44 @@ TEST(MusicSyncTransitionTest, EmptyOverrideChangesNothing) {
     EXPECT_EQ(defaulted.durationBars, planned.durationBars);
 }
 
+// Where the incoming track's volume starts to come up, in beats. Small = it is
+// audible early (a real blend); near the end = it stays silent until a quick swap.
+double targetVolumeStartBeat(const TransitionPlan& p) {
+    double start = -1.0;
+    for (const AutomationRamp& r : p.ramps) {
+        if (r.control == QStringLiteral("targetVolume")) {
+            start = (start < 0.0) ? r.fromBeat : std::min(start, r.fromBeat);
+        }
+    }
+    return start;
+}
+
+TEST(MusicSyncTransitionTest, UnsyncedTransitionKeepsTheOverlapTight) {
+    // A tempo gap the decks can't lock (124 -> 140 ≈ 13%). Blending two unaligned
+    // beats "sambas", so the incoming must stay silent until a quick swap at the
+    // phrase end — never two beats loud at once.
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 140.0, QStringLiteral("9A"), 0.62);
+    const TransitionPlan p = TransitionPlanner::plan(a, b, intent);
+    EXPECT_FALSE(p.beatSync);
+    const double start = targetVolumeStartBeat(p);
+    ASSERT_GE(start, 0.0);
+    EXPECT_GE(start, p.durationBeats - 2.0); // silent until the last ~half-bar
+}
+
+TEST(MusicSyncTransitionTest, SyncedTransitionStillBlendsAcrossTheSpan) {
+    // Tempos lock (124 -> 124.5): a real blend, incoming audible from the start.
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 124.5, QStringLiteral("9A"), 0.62);
+    const TransitionPlan p = TransitionPlanner::plan(a, b, intent);
+    EXPECT_TRUE(p.beatSync);
+    const double start = targetVolumeStartBeat(p);
+    ASSERT_GE(start, 0.0);
+    EXPECT_LT(start, p.durationBeats - 2.0); // comes in early — an actual crossfade
+}
+
 TrackFeatures makeEnergyTrack(std::int64_t id, double energy) {
     TrackFeatures f;
     f.mixxxTrackId = id;

@@ -163,6 +163,19 @@ estavam normais; o erro "recoverable MP3" no log era inofensivo.)
 - [x] **Testes**: blend normal, fonte no fim fecha independente dos beats, watchdog quebra o
   congelamento, e watchdog **não** dispara sem BPM. **ctest do módulo: 84/84 verdes.**
 
+### Fase 7a5 — sem beat-sync, sobreposição curta (fim do "samba")
+Teste real (pico, atos 6–7): algumas viradas soavam com *flam* ("samba") — duas batidas tocando
+desalinhadas ao mesmo tempo. Causa: nos pares com salto de tempo acima da tolerância (ex.: Infinity
+128 → Adagio 140 = 9,4% > 8%) o `beatSync` é desligado, mas o `buildAutomation` montava a **mesma
+sobreposição longa** de qualquer jeito (Breakdown swap: as duas audíveis por ~70% de 32 compassos).
+- [x] **`buildAutomation` agora é ciente do `beatSync`:** quando os tempos não casam, a automação
+  vira uma **troca apertada** — a faixa que entra fica **muda e sem grave** até um swap rápido nos
+  últimos ~2 tempos, com o filtro varrendo a que sai. As duas batidas nunca tocam alto juntas.
+  Substitui o blend por tipo de propósito (nenhum blend de batidas sem sync soa bem). Sugestão ao
+  DJ: trazer a nova numa intro sem batida via Enter @.
+- [x] **Testes**: par sem sync mantém a sobreposição curta (target sobe só no fim); par com sync
+  ainda faz o blend ao longo do trecho. **ctest do módulo: 86/86 verdes.**
+
 ## Próximas fases (roadmap)
 - **Fase 1 a 7** — ✅ concluídas (acima).
 - **Fase 8** — Gravação e relatórios (WAV master via Mixxx, tracklist, session-report). **→ set de 35 faixas executável e gravável.**
