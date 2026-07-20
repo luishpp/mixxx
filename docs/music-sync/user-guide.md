@@ -268,6 +268,22 @@ cedo"* e *"entra depois da intro"* são todas respostas válidas e combináveis.
 > baixo** — lá essa mesma transição é a "entrada" da próxima. A abertura não tem entrada, então o
 > Preview começa a valer da 2ª linha em diante.
 
+##### "→ drop" — aguardar o drop
+
+Ao lado de **Enter @** e de **Exit @** há um botão **→ drop**. Ele joga o ponto para o **Drop
+detectado mais próximo** do valor atual, **na própria faixa selecionada** (Enter @ e Exit @ são dois
+pontos *dentro* dela). Assim você ancora a virada no clímax sem calcular o tempo na mão:
+
+- **Exit @ → drop**: a faixa **espera o drop** e entrega nele, em vez de sair no vale de energia que
+  a análise escolhe por padrão. Como a referência é o Exit @ atual (~70% da faixa), ele cai no
+  **drop mais tardio**.
+- **Enter @ → drop**: a faixa **entra no drop** dela (referência perto do 0:00 → o **primeiro
+  drop**), em vez de começar numa intro de baixa energia.
+
+O ponto vira um override normal (`(pair)` na tabela) — dá para ajustar o mm:ss depois, ou voltar ao
+automático apagando o campo. Se a faixa não tiver Drop detectado, o rótulo avisa. Como sempre, a
+virada é quantizada/beat-matchada, então o drop cai no compasso.
+
 ##### Acelerar (ou alongar) uma transição
 
 A velocidade de uma transição é o **Bars** — quantos compassos ela leva. **Menos compassos =

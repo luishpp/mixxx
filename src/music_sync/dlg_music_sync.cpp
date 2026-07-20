@@ -500,6 +500,11 @@ void DlgMusicSync::slotGenerateSequence() {
                              "long intro so this track's groove lands while the previous one "
                              "is still driving. Disabled on the opener (it just starts)."));
     editRow->addWidget(entryEdit);
+    auto* entryDropButton = new QPushButton(tr("→ drop"), &dialog);
+    entryDropButton->setToolTip(
+            tr("Snap Enter @ to the nearest detected Drop of this track — bring it in on "
+               "its drop instead of a low-energy intro."));
+    editRow->addWidget(entryDropButton);
     editRow->addWidget(new QLabel(tr("Exit @:"), &dialog));
     auto* exitEdit = new QLineEdit(&dialog);
     exitEdit->setMaximumWidth(70);
@@ -507,6 +512,11 @@ void DlgMusicSync::slotGenerateSequence() {
     exitEdit->setToolTip(tr("mm:ss — where this track hands over. Empty = the analysis "
                             "decides. This is how a flash is kept to 90 s (spec 9)."));
     editRow->addWidget(exitEdit);
+    auto* exitDropButton = new QPushButton(tr("→ drop"), &dialog);
+    exitDropButton->setToolTip(
+            tr("Snap Exit @ to the nearest detected Drop of this track — hand over on its "
+               "drop (wait for the drop) instead of the low-energy exit window."));
+    editRow->addWidget(exitDropButton);
     auto* previewButton = new QPushButton(tr("Preview on decks"), &dialog);
     previewButton->setToolTip(
             tr("Plays how the SELECTED track comes in: it starts at its own Enter @ and "
@@ -579,7 +589,9 @@ void DlgMusicSync::slotGenerateSequence() {
                                        typeEdit,
                                        barsEdit,
                                        exitEdit,
-                                       entryEdit]() {
+                                       entryEdit,
+                                       entryDropButton,
+                                       exitDropButton]() {
         // setCurrentIndex fires currentIndexChanged, which would save straight
         // back over what we just read; block while syncing the widgets.
         const QSignalBlocker b1(typeEdit);
@@ -593,6 +605,7 @@ void DlgMusicSync::slotGenerateSequence() {
         typeEdit->setEnabled(hasOutgoing);
         barsEdit->setEnabled(hasOutgoing);
         exitEdit->setEnabled(hasOutgoing);
+        exitDropButton->setEnabled(hasOutgoing);
         if (hasOutgoing) {
             const TransitionOverride own = m_pController->loadOverrides().value(pairKeyAt(outRow));
             typeEdit->setCurrentIndex(
@@ -609,6 +622,7 @@ void DlgMusicSync::slotGenerateSequence() {
         const int trackRow = selectedTrackRow();
         const bool hasIncoming = trackRow >= 1;
         entryEdit->setEnabled(hasIncoming);
+        entryDropButton->setEnabled(hasIncoming);
         if (hasIncoming) {
             const TransitionOverride in =
                     m_pController->loadOverrides().value(pairKeyAt(trackRow - 1));
@@ -658,8 +672,73 @@ void DlgMusicSync::slotGenerateSequence() {
                 m_pController->setOverride(key.sourceTrackId, key.targetTrackId, override);
                 rebuildGrid();
             };
+    // "→ drop": snap Enter @ / Exit @ to the selected track's nearest Drop. Both
+    // points are inside the SELECTED track, so both use that track's own drops.
+    // The reference is the value shown now (typed override, or a sensible auto),
+    // so Enter @ lands on an early drop and Exit @ on a late one — "wait for the
+    // drop" without doing the math by hand.
+    const auto snapToDrop = [this,
+                                    selectedRow,
+                                    selectedTrackRow,
+                                    &best,
+                                    &byId,
+                                    entryEdit,
+                                    exitEdit,
+                                    saveEntry,
+                                    saveOutgoing,
+                                    previewStatus](bool isEntry) {
+        const int trackRow = selectedTrackRow();
+        if (isEntry ? (trackRow < 1) : (selectedRow() < 0)) {
+            previewStatus->setText(isEntry ? tr("The opener has no entry to snap.")
+                                           : tr("The closer has no exit to snap."));
+            return;
+        }
+        const TrackFeatures f = byId.value(best.items.at(trackRow).mixxxTrackId);
+        QLineEdit* field = isEntry ? entryEdit : exitEdit;
+        // Reference: the value shown now, or a sensible auto when the field is
+        // empty (0 for the entry -> earliest drop; the exit window for the exit).
+        std::int64_t reference = 0;
+        const std::optional<std::int64_t> typed = clockToMs(field->text());
+        if (typed.has_value()) {
+            reference = *typed;
+        } else if (!isEntry) {
+            reference = f.exitWindows.isEmpty() ? f.durationMs : f.exitWindows.first().startMs;
+        }
+        std::int64_t dropMs = -1;
+        std::int64_t bestDist = 0;
+        for (const Section& s : f.sections) {
+            if (s.type != QStringLiteral("Drop")) {
+                continue;
+            }
+            const std::int64_t dist = qAbs(s.startMs - reference);
+            if (dropMs < 0 || dist < bestDist) {
+                dropMs = s.startMs;
+                bestDist = dist;
+            }
+        }
+        if (dropMs < 0) {
+            previewStatus->setText(
+                    tr("No drop detected in %1.").arg(f.title.isEmpty() ? f.artist : f.title));
+            return;
+        }
+        field->setText(msToClock(dropMs));
+        if (isEntry) {
+            saveEntry();
+        } else {
+            saveOutgoing();
+        }
+        previewStatus->setText(isEntry
+                        ? tr("Enter @ snapped to the drop at %1.").arg(msToClock(dropMs))
+                        : tr("Exit @ snapped to the drop at %1.").arg(msToClock(dropMs)));
+    };
     connect(grid, &QTableWidget::itemSelectionChanged, &dialog, [showSelection]() {
         showSelection();
+    });
+    connect(entryDropButton, &QPushButton::clicked, &dialog, [snapToDrop]() {
+        snapToDrop(true);
+    });
+    connect(exitDropButton, &QPushButton::clicked, &dialog, [snapToDrop]() {
+        snapToDrop(false);
     });
     connect(typeEdit,
             QOverload<int>::of(&QComboBox::currentIndexChanged),
