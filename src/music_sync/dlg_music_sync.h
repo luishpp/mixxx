@@ -56,7 +56,6 @@ class DlgMusicSync : public QDialog {
     QPushButton* m_pSnapshotButton;
     QPushButton* m_pClearButton;
     QPushButton* m_pAnalyzeButton;
-    QComboBox* m_pEnergyPreset;
     QPushButton* m_pGenerateButton;
     QTableWidget* m_pTable;
     QLabel* m_pSummaryLabel;

@@ -14,9 +14,8 @@ Numa biblioteca nova, use nesta ordem:
 0. Marque ☑ **Enable Music Sync** (sem isso as ações ficam cinza).
 1. **Analyze missing (Mixxx)** — só se houver faixas sem BPM/tom. Espere terminar (ele já re-snapshota sozinho).
 2. **Read native analysis from library** — calcula tudo e grava no sidecar.
-3. Escolha o **preset de energia** (combo).
-4. **Generate sequence**.
-5. No diálogo: escolha um par → **Preview on decks** para ouvir; ajuste **Transition/Bars** se
+3. **Generate sequence**.
+4. No diálogo: escolha um par → **Preview on decks** para ouvir; ajuste **Transition/Bars** se
    quiser; **Run set** para tocar o set (ou só um ato).
 
 > **Depois de atualizar o módulo (novo build), clique em "Read native analysis from library".**
@@ -41,8 +40,8 @@ Numa biblioteca nova, use nesta ordem:
 
 ### ☑ Enable Music Sync (stored in the sidecar)
 
-**É o interruptor do painel.** Desmarcado, **todas as ações ficam desabilitadas** (os 4 botões e o
-combo de preset) e o painel avisa *"Music Sync is off"*. O estado é gravado no sidecar
+**É o interruptor do painel.** Desmarcado, **todas as ações ficam desabilitadas** (os 4 botões) e o
+painel avisa *"Music Sync is off"*. O estado é gravado no sidecar
 (`module_enabled`), então **persiste entre sessões** — se abrir o painel e tudo estiver cinza,
 provavelmente é só marcar a caixa.
 
@@ -93,33 +92,18 @@ Varre até 500 faixas e seleciona as que **não têm beatgrid/BPM ou não têm t
 > mas **não tem waveform** não é repescada — e sem waveform não há energia. Nesse caso, analise-a
 > pela própria biblioteca do Mixxx (clique direito → *Analisar*).
 
-### ▸ Preset de energia (combo)
+### ▸ Forma da jornada de energia (fixa)
 
-A **forma da jornada** que o motor tenta seguir. Ele compara a energia de cada faixa com o alvo da
-curva **na posição em que ela cai no set** e usa isso para (a) escolher a faixa de abertura e
-(b) pontuar o *energy fit* de cada alternativa.
+Não há mais um seletor de preset. A forma-alvo é fixa em **Late peak** — constrói longo, estoura
+perto do fim (~90%) e alivia no fecho, que é a jornada do seu plano (§6: pico no melodic
+techno/trance e retorno emocional).
 
-> **É lido só no instante do clique em Generate sequence.** Mudar o combo sozinho não faz nada —
-> e mudar depois **não** altera um set já gerado.
-
-As curvas são estas (energia 0..1 × posição no set):
-
-| Preset | Curva | O que você ouve | Quando usar |
-|---|---|---|---|
-| **Ascending** | 0.25 → 1.00, reta | Sobe sem parar do início ao fim. Termina no ponto mais alto. | Aquecimento, warm-up, set que entrega a pista para outro DJ |
-| **Center peak** | 0.30 → **1.00 no meio** → 0.40 | Pico na metade e desce; fecha mais baixo que começou | Set de meio de noite, quando alguém entra depois de você |
-| **Late peak** *(padrão)* | 0.25 → 0.50 → 0.78 → **1.00 aos 90%** → 0.65 | Constrói longo, estoura perto do fim e alivia no fecho | **O do seu plano**: pico no melodic techno/trance e retorno emocional (§6) |
-| **Waves** | 0.30 → 0.80 → **0.45** → 0.90 → 0.50 | Dois picos com uma **queda no meio** | O §17 do plano: *"a queda depois de Under Control é intencional"* — dá para reconstruir |
-| **Constant** | 0.60 reto | Nenhuma jornada: energia parelha do começo ao fim | Fundo de festa, bar, quando o set não é o protagonista |
-
-**Impacto prático:** com *Ascending*, a abertura vai ser a faixa **mais fraca** que você tem (alvo
-0.25 na posição 0). Com *Constant*, o motor não tem preferência de abertura — qualquer faixa de
-energia média serve, e o *energy fit* deixa de ser um critério útil.
-
-> ⚠️ **A curva só reordena dentro do ato**, e só quando a ordem do plano não lidera. Como hoje **a
-> ordem do plano sempre lidera** (veja *Generate sequence*), o preset afeta sobretudo o **número
-> de *energy fit*** que você vê — é um **termômetro** de quão bem o seu set casa com aquela
-> jornada, não um comando que o reordena.
+> **Por que saiu o combo?** Ele só alimentava o **número de *energy fit*** do cabeçalho, não a
+> ordem. Com a curadoria híbrida — ordem dos atos fixa pela narrativa, **âncoras travadas** e **a
+> ordem do plano sempre liderando** — a curva não tem por onde reordenar o set. Somando a isso a
+> análise das referências (a energia é um **platô**, não uma curva), trocar o preset mudava só o
+> termômetro. Ele foi removido para não prometer o que não fazia. O *energy fit %* continua no
+> cabeçalho, medido contra o Late peak.
 
 ### ▸ Generate sequence
 

@@ -136,7 +136,6 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
           m_pSnapshotButton(nullptr),
           m_pClearButton(nullptr),
           m_pAnalyzeButton(nullptr),
-          m_pEnergyPreset(nullptr),
           m_pGenerateButton(nullptr),
           m_pTable(nullptr),
           m_pSummaryLabel(nullptr) {
@@ -197,15 +196,6 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
     connect(m_pAnalyzeButton, &QPushButton::clicked, this, &DlgMusicSync::slotAnalyzeMissing);
     pActions->addWidget(m_pAnalyzeButton);
 
-    m_pEnergyPreset = new QComboBox(this);
-    m_pEnergyPreset->addItem(tr("Ascending"), static_cast<int>(EnergyPreset::Ascending));
-    m_pEnergyPreset->addItem(tr("Center peak"), static_cast<int>(EnergyPreset::CenterPeak));
-    m_pEnergyPreset->addItem(tr("Late peak"), static_cast<int>(EnergyPreset::LatePeak));
-    m_pEnergyPreset->addItem(tr("Waves"), static_cast<int>(EnergyPreset::Waves));
-    m_pEnergyPreset->addItem(tr("Constant"), static_cast<int>(EnergyPreset::Constant));
-    m_pEnergyPreset->setCurrentIndex(2); // Late peak
-    pActions->addWidget(m_pEnergyPreset);
-
     m_pGenerateButton = new QPushButton(tr("Generate sequence"), this);
     connect(m_pGenerateButton, &QPushButton::clicked, this, &DlgMusicSync::slotGenerateSequence);
     pActions->addWidget(m_pGenerateButton);
@@ -260,7 +250,6 @@ void DlgMusicSync::updateActionsEnabled() {
     m_pSnapshotButton->setEnabled(enabled);
     m_pClearButton->setEnabled(enabled);
     m_pAnalyzeButton->setEnabled(enabled);
-    m_pEnergyPreset->setEnabled(enabled);
     m_pGenerateButton->setEnabled(enabled);
     // The switch itself stays usable unless the sidecar failed or work is running.
     m_pEnabledCheckBox->setEnabled(m_ready && !m_busy);
@@ -332,7 +321,11 @@ void DlgMusicSync::slotAnalysisFinished() {
 
 void DlgMusicSync::slotGenerateSequence() {
     MixIntent intent;
-    intent.energyPreset = static_cast<EnergyPreset>(m_pEnergyPreset->currentData().toInt());
+    // Energy is a plateau in this set (the reference-mix analysis), and the
+    // hybrid curation (act order + locked anchors + plan-led order) already fixes
+    // the shape, so a chooser here only moved the reported energy-fit %, never the
+    // order. Kept at the default purely so that % stays meaningful.
+    intent.energyPreset = EnergyPreset::LatePeak;
     intent.maxTempoChangePercent = tempo_tolerance::kBalanced;
 
     QVector<Arrangement> arrangementsComputed = m_pController->generateSequences(intent);
