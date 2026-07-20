@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QObject>
 #include <QString>
 #include <QVector>
@@ -57,6 +58,16 @@ class SetExecutor : public QObject {
     /// an engine.
     static bool reachedExit(double pos01, std::int64_t exitMs, std::int64_t durationMs);
 
+    /// Whether a running transition should be finalized: the blend finished, OR a
+    /// safety net tripped — the source reached its end, or the wall clock ran well
+    /// past the expected length. Pure and static so the "a stuck transition never
+    /// freezes the set" guarantee is testable without an engine.
+    static bool transitionComplete(double beats,
+            double durationBeats,
+            double sourcePos01,
+            std::int64_t elapsedMs,
+            double expectedMs);
+
     /// Starts the set. `resolve` supplies the TrackPointer for a track id;
     /// tracks are loaded lazily, one deck ahead, never all at once.
     void start(const SetProgram& program,
@@ -100,6 +111,7 @@ class SetExecutor : public QObject {
     int m_preparedUpTo = -1;    // highest position already loaded/cued
     int m_cuedSeekedUpTo = -1;  // highest position pre-seeked to its entry point
     double m_lastCrossfaderSet = 0.0;
+    QElapsedTimer m_transitionClock; // wall-clock since the current transition began
 };
 
 } // namespace mixxx::music_sync

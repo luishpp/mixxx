@@ -256,5 +256,37 @@ TEST(MusicSyncSetTest, ReachedExitNeverFiresOnMissingData) {
     EXPECT_FALSE(SetExecutor::reachedExit(0.9, 0, 300000));
 }
 
+TEST(MusicSyncSetTest, TransitionCompletesWhenTheBlendPlaysOut) {
+    // The normal path: enough beats elapsed. Expected wall-clock of a 128-beat
+    // blend at 125 BPM is ~61 s.
+    constexpr double kDurationBeats = 128.0;
+    constexpr double kExpectedMs = 128.0 * 60000.0 / 125.0;
+    EXPECT_FALSE(SetExecutor::transitionComplete(0.0, kDurationBeats, 0.6, 0, kExpectedMs));
+    EXPECT_FALSE(SetExecutor::transitionComplete(127.9, kDurationBeats, 0.9, 30000, kExpectedMs));
+    EXPECT_TRUE(SetExecutor::transitionComplete(128.0, kDurationBeats, 0.9, 30000, kExpectedMs));
+}
+
+TEST(MusicSyncSetTest, TransitionCompletesWhenTheSourceReachesItsEnd) {
+    // The stall we hit: the source ran to its end but the beat count never
+    // crossed the target, so the handover never closed and the set froze. A
+    // source at its end must finalize the transition no matter the beat count.
+    constexpr double kExpectedMs = 128.0 * 60000.0 / 125.0;
+    EXPECT_TRUE(SetExecutor::transitionComplete(90.0, 128.0, 0.999, 40000, kExpectedMs));
+    EXPECT_TRUE(SetExecutor::transitionComplete(90.0, 128.0, 1.0, 40000, kExpectedMs));
+    // Still mid-track with beats short: keep blending.
+    EXPECT_FALSE(SetExecutor::transitionComplete(90.0, 128.0, 0.95, 40000, kExpectedMs));
+}
+
+TEST(MusicSyncSetTest, TransitionWatchdogBreaksAStall) {
+    // Last resort: if neither the beats nor the source position ever close the
+    // handover (a deck not tracking position), the wall clock breaks the freeze
+    // after ~2x the expected length.
+    constexpr double kExpectedMs = 128.0 * 60000.0 / 125.0; // ~61 s
+    EXPECT_FALSE(SetExecutor::transitionComplete(10.0, 128.0, 0.7, 60000, kExpectedMs));
+    EXPECT_TRUE(SetExecutor::transitionComplete(10.0, 128.0, 0.7, 200000, kExpectedMs));
+    // No expected time (no BPM) disables the watchdog — it must not fire blindly.
+    EXPECT_FALSE(SetExecutor::transitionComplete(10.0, 128.0, 0.7, 9000000, 0.0));
+}
+
 } // namespace
 } // namespace mixxx::music_sync

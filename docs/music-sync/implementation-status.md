@@ -149,6 +149,20 @@ set do Ato 2, `Transition 1 -> 2 "Bass Swap"` disparou 3:44 após o início, exa
   posição). O `beginTransition` continua re-buscando o ponto na virada (autoritativo), então isto é
   puramente visual e nunca briga com um scrub do DJ. Testes do módulo: 80/80.
 
+### Fase 7a4 — rede de segurança: uma transição travada não congela o set
+Teste real (Run set atos 1–2): o set parou entre faixas — a faixa que saía tocou até o fim e a
+seguinte nunca carregou no deck livre. Diagnóstico: a transição só terminava quando
+`beats >= durationBeats`, e `beats` vem da **posição da faixa que sai**; quando ela chega ao fim (ou
+sua posição para de avançar) sem cruzar o alvo, o `finishTransition` nunca roda — e como ele é quem
+para a faixa antiga e **carrega a próxima** (`prepare`), o set congela sem saída. (Dados da faixa
+estavam normais; o erro "recoverable MP3" no log era inofensivo.)
+- [x] **`SetExecutor::transitionComplete()`** (pura/estática, como `reachedExit`): conclui a
+  transição no caminho normal (blend terminou) **ou** quando uma rede de segurança dispara — a fonte
+  chegou ao fim (`pos ≥ 0.999`) **ou** um watchdog de tempo (> 2× a duração esperada + 5 s, quando há
+  BPM). Loga quando completa antecipadamente.
+- [x] **Testes**: blend normal, fonte no fim fecha independente dos beats, watchdog quebra o
+  congelamento, e watchdog **não** dispara sem BPM. **ctest do módulo: 84/84 verdes.**
+
 ## Próximas fases (roadmap)
 - **Fase 1 a 7** — ✅ concluídas (acima).
 - **Fase 8** — Gravação e relatórios (WAV master via Mixxx, tracklist, session-report). **→ set de 35 faixas executável e gravável.**

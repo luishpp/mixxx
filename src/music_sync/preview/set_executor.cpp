@@ -192,9 +192,45 @@ void SetExecutor::onTick() {
         applyWrite(program.writes.at(m_nextWrite), sourceDeck, targetDeck);
         ++m_nextWrite;
     }
-    if (beats >= program.durationBeats) {
+    // Complete when the blend is done — OR when a safety net trips. Without these
+    // a single transition that never closes freezes the whole set: we hit exactly
+    // that when the source track reached its end but the beat count (read from the
+    // source's position) never crossed the target, so the next track never loaded.
+    const double expectedMs =
+            m_refBpm > 0.0 ? program.durationBeats * 60000.0 / m_refBpm : 0.0;
+    const std::int64_t elapsedMs =
+            m_transitionClock.isValid() ? m_transitionClock.elapsed() : 0;
+    if (transitionComplete(beats,
+                program.durationBeats,
+                pLive->position(),
+                elapsedMs,
+                expectedMs)) {
+        if (beats < program.durationBeats) {
+            kLogger.warning() << "Transition" << (m_current + 1) << "->" << (m_current + 2)
+                              << "completed early (source ended or watchdog; beats=" << beats
+                              << "of" << program.durationBeats << ") so the set keeps moving";
+        }
         finishTransition();
     }
+}
+
+bool SetExecutor::transitionComplete(double beats,
+        double durationBeats,
+        double sourcePos01,
+        std::int64_t elapsedMs,
+        double expectedMs) {
+    if (beats >= durationBeats) {
+        return true; // the blend played out — the normal path
+    }
+    if (sourcePos01 >= 0.999) {
+        return true; // the source can't advance any further; don't wait forever
+    }
+    // Watchdog: something stalled (a deck not tracking position, a bad seek).
+    // Give it double the expected wall-clock plus a floor, then move on.
+    if (expectedMs > 0.0 && elapsedMs > static_cast<std::int64_t>(expectedMs * 2.0) + 5000) {
+        return true;
+    }
+    return false;
 }
 
 void SetExecutor::beginTransition() {
@@ -228,6 +264,7 @@ void SetExecutor::beginTransition() {
     m_nextWrite = 0;
     m_startPos01 = pLive->position();
     m_refBpm = pLive->bpm() > 0.0 ? pLive->bpm() : 128.0;
+    m_transitionClock.start();
     kLogger.info() << "Transition" << (m_current + 1) << "->" << (m_current + 2)
                    << transitionTypeName(program.type) << "beats=" << program.durationBeats
                    << "sync=" << program.needsBeatSync();
