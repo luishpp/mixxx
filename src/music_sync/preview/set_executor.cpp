@@ -256,6 +256,14 @@ void SetExecutor::beginTransition() {
     pNext->setSync(program.needsBeatSync());
     pNext->setPlaying(true);
     if (program.needsBeatSync()) {
+        // A forced beatmatch across a real tempo gap is a big stretch that would
+        // detune the whole track; keylock holds the pitch. Small locks (a couple
+        // %) do not need it and it costs CPU, so gate on the gap.
+        const double liveBpm = pLive->bpm();
+        const double nextBpm = pNext->bpm();
+        const bool bigStretch = liveBpm > 0.0 && nextBpm > 0.0 &&
+                std::abs(nextBpm - liveBpm) / liveBpm > 0.04;
+        pNext->setKeylock(bigStretch);
         // Match TEMPO and phase to the outgoing deck, not just phase — otherwise
         // the two BPMs stay a hair apart and drift into a flam over the blend
         // ("samba"). This is the deck's SYNC button: set the rate to the leader

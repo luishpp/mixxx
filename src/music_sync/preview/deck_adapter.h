@@ -57,6 +57,10 @@ class DeckAdapter : public QObject {
     /// so the two BPMs stay a hair apart and the beats drift into a flam over a
     /// long blend ("samba"). This sets the rate to match, so they stay locked.
     void matchTempoAndPhase();
+    /// Lock the musical pitch while the tempo changes. On a big beatmatch stretch
+    /// (a 140 BPM track pulled to 128 is −8.6%) this stops the whole track from
+    /// detuning ~1.5 semitones and changing key.
+    void setKeylock(bool enabled);
     void setVolume(double volume);   // 0..1, 1 = unity
     void setEqLow(double value);     // 0 kill .. 1 unity .. 4 boost
     void setFilter(double value);    // quick effect super knob, 0..1, 0.5 neutral
@@ -77,6 +81,7 @@ class DeckAdapter : public QObject {
     ControlProxy* m_pSyncEnabled = nullptr;
     ControlProxy* m_pSyncPhase = nullptr;
     ControlProxy* m_pBeatSync = nullptr;
+    ControlProxy* m_pKeylock = nullptr;
     ControlProxy* m_pQuantize = nullptr;
     ControlProxy* m_pVolume = nullptr;
     ControlProxy* m_pOrientation = nullptr;

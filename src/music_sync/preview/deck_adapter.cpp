@@ -28,6 +28,7 @@ DeckAdapter::DeckAdapter(int deckIndex, QObject* parent)
     m_pSyncEnabled = new ControlProxy(m_group, QStringLiteral("sync_enabled"), this);
     m_pSyncPhase = new ControlProxy(m_group, QStringLiteral("beatsync_phase"), this);
     m_pBeatSync = new ControlProxy(m_group, QStringLiteral("beatsync"), this);
+    m_pKeylock = new ControlProxy(m_group, QStringLiteral("keylock"), this);
     m_pQuantize = new ControlProxy(m_group, QStringLiteral("quantize"), this);
     m_pVolume = new ControlProxy(m_group, QStringLiteral("volume"), this);
     m_pOrientation = new ControlProxy(m_group, QStringLiteral("orientation"), this);
@@ -91,6 +92,12 @@ void DeckAdapter::matchTempoAndPhase() {
         m_pBeatSync->set(1.0); // push button: matches tempo AND phase to the other deck
     } else {
         syncPhase(); // fall back to phase-only if beatsync is unavailable
+    }
+}
+
+void DeckAdapter::setKeylock(bool enabled) {
+    if (m_pKeylock && m_pKeylock->valid()) {
+        m_pKeylock->set(enabled ? 1.0 : 0.0);
     }
 }
 

@@ -189,6 +189,22 @@ tempos ficam um triz diferentes e **derivam** ~1 batida ao longo de 32 compassos
   apertada da 7a5.)
 - Testes do módulo seguem **86/86** (mudança é de controle de deck em runtime).
 
+### Fase 7a7 — beatmatch forçado por par (+ keylock) para saltos grandes
+A pedido (Infinity 128 → Adagio 140): o DJ ouviu a troca apertada e quis **blend + casar as
+batidas**. Como o salto é 9,4% (> 8%), o `Automatic` não sincroniza. Faltava um jeito de forçar.
+- [x] **`TransitionOverride::forceBeatSync`** (tri-state: unset/força/proíbe). **Migration v10**
+  (`force_beat_sync`). O planner passa a usar
+  `plan.beatSync = override.forceBeatSync ? *override : (tempoPct <= maxTempoPct*1.6)`.
+- [x] **Keylock no estica grande:** `DeckAdapter::setKeylock`; no `beginTransition`/preview, quando
+  sincroniza e o gap > 4%, liga o keylock na faixa que entra (o −8,6% da Adagio não derruba o tom
+  ~1,5 semitom). `handBackToUser` **não** desliga (senão detonaria o tom da faixa que segue esticada).
+- [x] **UI:** combo **Beat sync** (Automatic / Beatmatch / No sync) no editor, salvo no par de saída.
+- [x] **Nuance importante:** forçar o beatmatch **mantém o tipo** que o motor escolheu pro salto (um
+  corte) — pra virar mescla, combina-se com um **tipo de blend**. Aplicado no par Infinity→Adagio:
+  **Breakdown swap + Beatmatch**.
+- [x] **Testes**: planner força/proíbe o lock; repo faz round-trip tri-state; blend só com tipo de
+  blend. **ctest do módulo: 89/89 verdes.**
+
 ## Próximas fases (roadmap)
 - **Fase 1 a 7** — ✅ concluídas (acima).
 - **Fase 8** — Gravação e relatórios (WAV master via Mixxx, tracklist, session-report). **→ set de 35 faixas executável e gravável.**

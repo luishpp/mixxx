@@ -680,6 +680,41 @@ TEST(MusicSyncTransitionTest, SyncedTransitionStillBlendsAcrossTheSpan) {
     EXPECT_LT(start, p.durationBeats - 2.0); // comes in early — an actual crossfade
 }
 
+TEST(MusicSyncTransitionTest, ForceBeatSyncOverridesTheTempoGap) {
+    // A 124 -> 140 gap (~13%) the rule refuses to sync; the DJ forces it (pull a
+    // 140 track onto a 128 body).
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 140.0, QStringLiteral("9A"), 0.62);
+    EXPECT_FALSE(TransitionPlanner::plan(a, b, intent).beatSync);
+
+    TransitionOverride force;
+    force.forceBeatSync = true;
+    EXPECT_TRUE(TransitionPlanner::plan(a, b, intent, force).beatSync);
+
+    // Forcing the lock alone keeps the type the planner chose for a big gap (a
+    // cut). To get a beat-matched BLEND you also pick a blend type — then it is a
+    // real crossfade, not the anti-samba tight swap an unlocked gap would get.
+    force.type = TransitionType::EqBlend;
+    const TransitionPlan p = TransitionPlanner::plan(a, b, intent, force);
+    EXPECT_TRUE(p.beatSync);
+    const double start = targetVolumeStartBeat(p);
+    ASSERT_GE(start, 0.0);
+    EXPECT_LT(start, p.durationBeats - 2.0);
+}
+
+TEST(MusicSyncTransitionTest, ForbidBeatSyncOverridesAMatchedTempo) {
+    // Even when the tempos agree, the DJ can veto the lock (keep it a clean cut).
+    const MixIntent intent;
+    const TrackFeatures a = makeTrackWithWindows(1, 124.0, QStringLiteral("8A"), 0.60);
+    const TrackFeatures b = makeTrackWithWindows(2, 124.5, QStringLiteral("9A"), 0.62);
+    EXPECT_TRUE(TransitionPlanner::plan(a, b, intent).beatSync);
+
+    TransitionOverride forbid;
+    forbid.forceBeatSync = false;
+    EXPECT_FALSE(TransitionPlanner::plan(a, b, intent, forbid).beatSync);
+}
+
 TrackFeatures makeEnergyTrack(std::int64_t id, double energy) {
     TrackFeatures f;
     f.mixxxTrackId = id;

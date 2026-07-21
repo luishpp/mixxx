@@ -134,6 +134,9 @@ bool SidecarDatabase::applyMigrations() {
         case 9:
             ok = migrateToV9();
             break;
+        case 10:
+            ok = migrateToV10();
+            break;
         default:
             kLogger.warning() << "No migration defined for version" << version;
             ok = false;
@@ -256,6 +259,14 @@ bool SidecarDatabase::migrateToV9() {
     return execStatement(m_database,
             QStringLiteral("ALTER TABLE MusicSyncTransitionOverrides "
                            "ADD COLUMN target_entry_ms INTEGER"));
+}
+
+bool SidecarDatabase::migrateToV10() {
+    // Force/forbid beat-sync for a pair, overriding the tempo-gap rule (NULL =
+    // planner decides, 1 = force on, 0 = force off).
+    return execStatement(m_database,
+            QStringLiteral("ALTER TABLE MusicSyncTransitionOverrides "
+                           "ADD COLUMN force_beat_sync INTEGER"));
 }
 
 bool SidecarDatabase::migrateToV8() {

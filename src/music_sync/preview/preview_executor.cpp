@@ -145,6 +145,11 @@ void PreviewExecutor::begin() {
     m_pSource->setPlaying(true);
     m_pTarget->setPlaying(true);
     if (beatSync) {
+        // A big stretch (a forced beatmatch across a real gap) detunes the track;
+        // keylock holds the pitch. Gate on the gap so small locks skip the cost.
+        const double src = m_pSource->bpm();
+        const double tgt = m_pTarget->bpm();
+        m_pTarget->setKeylock(src > 0.0 && tgt > 0.0 && std::abs(tgt - src) / src > 0.04);
         // Match TEMPO and phase to the source, not just phase: sync_enabled alone
         // can leave the incoming leading at its own BPM, so the two drift into a
         // flam ("samba"). This is the deck's SYNC button — set the rate to match,

@@ -44,10 +44,15 @@ struct TransitionOverride {
     /// the energy right at the handover. Setting this skips past the intro so
     /// the incoming groove lands while the outgoing one is still driving.
     std::optional<std::int64_t> targetEntryMs;
+    /// Force (true) or forbid (false) beat-sync for this pair, overriding the
+    /// tempo-gap rule. Set true to beatmatch across a gap the planner would
+    /// otherwise refuse (e.g. pull a 140 BPM track down to a 128 body); the
+    /// executor tempo-locks it and keylocks the big stretch so the pitch holds.
+    std::optional<bool> forceBeatSync;
 
     bool isEmpty() const {
         return !type.has_value() && !bars.has_value() && !sourceExitMs.has_value() &&
-                !targetEntryMs.has_value();
+                !targetEntryMs.has_value() && !forceBeatSync.has_value();
     }
 
     /// The fields this override actually decides, layered over `base`. Used to
@@ -65,6 +70,9 @@ struct TransitionOverride {
         }
         if (targetEntryMs) {
             out.targetEntryMs = targetEntryMs;
+        }
+        if (forceBeatSync) {
+            out.forceBeatSync = forceBeatSync;
         }
         return out;
     }

@@ -491,6 +491,17 @@ void DlgMusicSync::slotGenerateSequence() {
         barsEdit->addItem(QString::number(bars), bars);
     }
     editRow->addWidget(barsEdit);
+    editRow->addWidget(new QLabel(tr("Beat sync:"), &dialog));
+    auto* syncEdit = new QComboBox(&dialog);
+    syncEdit->addItem(tr("Automatic"), -1);
+    syncEdit->addItem(tr("Beatmatch"), 1);
+    syncEdit->addItem(tr("No sync"), 0);
+    syncEdit->setToolTip(
+            tr("Automatic = lock the tempo only when the gap is small enough. Beatmatch = "
+               "force it (pulls a far-off track onto this tempo, with keylock so the pitch "
+               "holds) — for blending, say, a 140 track onto a 128 body. No sync = never "
+               "lock; each track keeps its tempo (a clean cut)."));
+    editRow->addWidget(syncEdit);
     editRow->addWidget(new QLabel(tr("Enter @:"), &dialog));
     auto* entryEdit = new QLineEdit(&dialog);
     entryEdit->setMaximumWidth(70);
@@ -588,6 +599,7 @@ void DlgMusicSync::slotGenerateSequence() {
                                        pairKeyAt,
                                        typeEdit,
                                        barsEdit,
+                                       syncEdit,
                                        exitEdit,
                                        entryEdit,
                                        entryDropButton,
@@ -598,12 +610,14 @@ void DlgMusicSync::slotGenerateSequence() {
         const QSignalBlocker b2(barsEdit);
         const QSignalBlocker b3(exitEdit);
         const QSignalBlocker b4(entryEdit);
-        // Type/Bars/Exit @ describe how this track hands OVER — the outgoing
+        const QSignalBlocker b5(syncEdit);
+        // Type/Bars/Sync/Exit @ describe how this track hands OVER — the outgoing
         // transition (this row -> next). The closer has none.
         const int outRow = selectedRow();
         const bool hasOutgoing = outRow >= 0;
         typeEdit->setEnabled(hasOutgoing);
         barsEdit->setEnabled(hasOutgoing);
+        syncEdit->setEnabled(hasOutgoing);
         exitEdit->setEnabled(hasOutgoing);
         exitDropButton->setEnabled(hasOutgoing);
         if (hasOutgoing) {
@@ -611,10 +625,13 @@ void DlgMusicSync::slotGenerateSequence() {
             typeEdit->setCurrentIndex(
                     typeEdit->findData(own.type ? static_cast<int>(*own.type) : -1));
             barsEdit->setCurrentIndex(barsEdit->findData(own.bars ? *own.bars : -1));
+            syncEdit->setCurrentIndex(
+                    syncEdit->findData(own.forceBeatSync ? (*own.forceBeatSync ? 1 : 0) : -1));
             exitEdit->setText(own.sourceExitMs ? msToClock(*own.sourceExitMs) : QString());
         } else {
             typeEdit->setCurrentIndex(typeEdit->findData(-1));
             barsEdit->setCurrentIndex(barsEdit->findData(-1));
+            syncEdit->setCurrentIndex(syncEdit->findData(-1));
             exitEdit->clear();
         }
         // Enter @ describes where this track comes IN — the incoming transition
@@ -638,6 +655,7 @@ void DlgMusicSync::slotGenerateSequence() {
                                       pairKeyAt,
                                       typeEdit,
                                       barsEdit,
+                                      syncEdit,
                                       exitEdit,
                                       rebuildGrid]() {
         const int row = selectedRow();
@@ -648,11 +666,15 @@ void DlgMusicSync::slotGenerateSequence() {
         TransitionOverride override = m_pController->loadOverrides().value(key);
         override.type.reset();
         override.bars.reset();
+        override.forceBeatSync.reset();
         if (typeEdit->currentData().toInt() >= 0) {
             override.type = static_cast<TransitionType>(typeEdit->currentData().toInt());
         }
         if (barsEdit->currentData().toInt() > 0) {
             override.bars = barsEdit->currentData().toInt();
+        }
+        if (syncEdit->currentData().toInt() >= 0) {
+            override.forceBeatSync = syncEdit->currentData().toInt() == 1;
         }
         override.sourceExitMs = clockToMs(exitEdit->text());
         m_pController->setOverride(key.sourceTrackId, key.targetTrackId, override);
@@ -745,6 +767,10 @@ void DlgMusicSync::slotGenerateSequence() {
             &dialog,
             [saveOutgoing](int) { saveOutgoing(); });
     connect(barsEdit,
+            QOverload<int>::of(&QComboBox::currentIndexChanged),
+            &dialog,
+            [saveOutgoing](int) { saveOutgoing(); });
+    connect(syncEdit,
             QOverload<int>::of(&QComboBox::currentIndexChanged),
             &dialog,
             [saveOutgoing](int) { saveOutgoing(); });

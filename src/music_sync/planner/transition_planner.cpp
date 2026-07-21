@@ -252,7 +252,11 @@ TransitionPlan TransitionPlanner::plan(const TrackFeatures& from,
     // (Weightless 130 -> Gravity 127 came in off-beat despite a 2.3% gap).
     const double tempoPct =
             (from.bpm > 0.0) ? std::abs(to.bpm - from.bpm) / from.bpm * 100.0 : 100.0;
-    plan.beatSync = tempoPct <= maxTempoPct * 1.6;
+    // The DJ can force or forbid the tempo lock for a pair (RF-010): forcing it
+    // beatmatches across a gap the rule would refuse — e.g. pulling a 140 BPM
+    // track down onto a 128 body so its intro blends instead of cutting.
+    plan.beatSync = override.forceBeatSync ? *override.forceBeatSync
+                                           : (tempoPct <= maxTempoPct * 1.6);
 
     buildAutomation(plan);
 

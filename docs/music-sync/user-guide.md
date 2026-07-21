@@ -147,7 +147,7 @@ A **1ª linha** tem `—` em Enter @ (a abertura não entra por transição, só
 Selecione a linha e mexa nos campos abaixo da tabela. **Cada linha é uma faixa, e tudo é sobre ela:**
 
 ```text
-[Transition ▾]  Bars: [▾]  Enter @: [____] [→ drop]  Exit @: [____] [→ drop]
+[Transition ▾]  Bars: [▾]  Beat sync: [▾]  Enter @: [____] [→ drop]  Exit @: [____] [→ drop]
 ```
 
 - ⏮️ **Enter @** — *onde a faixa começa.* Vazio = automático (que prefere a intro de baixa energia).
@@ -177,13 +177,15 @@ Selecione a linha e mexa nos campos abaixo da tabela. **Cada linha é uma faixa,
 
 - **Bars** = tamanho da virada (8/16/32/64). **Menos = mais rápida.** Automático mira 32, limitado
   pela janela (Cut nunca passa de 8).
-- **Beat sync segue o plano, não o tipo:** quem sabe se os tempos casam é o planejador (casam quando
-  o salto de tempo é ≤ ~8%). `Cut` e `Auto DJ fallback` nunca sincronizam.
-- **Sem sync = sobreposição curta (anti-samba):** quando os tempos são distantes demais para casar
-  (ex.: um salto pro trance), blendar as duas batidas geraria aquele *flam* ("samba"). Aí a virada
-  fica **apertada**: a faixa que entra fica **muda até uma troca rápida** no fim da frase (com o
-  filtro varrendo a que sai), então duas batidas desalinhadas nunca tocam alto juntas. Para uma
-  entrada suave nesses casos, traga a nova faixa numa **intro sem batida** via **Enter @**.
+- **Bars** — automático mira 32, limitado pela janela (Cut nunca passa de 8).
+- **Beat sync (Automatic / Beatmatch / No sync)** — por padrão (*Automatic*) o motor trava o tempo só
+  quando o salto é ≤ ~8%; acima disso não trava e faz a **troca apertada** (a faixa que entra fica
+  muda até um swap rápido, sem *samba*). Você pode **forçar**:
+  - **Beatmatch** — casa o tempo **mesmo num salto grande** (puxa, ex., um trance de 140 pro corpo de
+    128), com **keylock** pra o tom não cair no estica. **Combine com um tipo de blend** (EQ Blend /
+    Breakdown swap) pra virar mescla de verdade — só o Beatmatch mantém o tipo de corte que o motor
+    escolheu pro salto. Ideal pra faixas com **intro que dá pra blendar** (ex.: a Adagio for Strings).
+  - **No sync** — nunca trava; cada faixa mantém o tempo (corte limpo).
 
 > ⚠️ **Forçar o tipo errado é audível.** `Cut` num par harmônico e no mesmo tempo joga fora uma
 > mescla boa; `Bass Swap` num par com 20% de diferença de tempo estica a faixa nova (foi assim que o

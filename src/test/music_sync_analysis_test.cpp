@@ -217,6 +217,34 @@ TEST(MusicSyncOverrideRepositoryTest, RoundTripsExitAndEntryPoints) {
     EXPECT_FALSE(loaded.value(key).bars.has_value());
 }
 
+TEST(MusicSyncOverrideRepositoryTest, RoundTripsForceBeatSync) {
+    // The tempo-lock veto is tri-state: unset (planner decides), true (force on),
+    // false (force off). All three must survive a reload distinctly.
+    QTemporaryDir tempDir;
+    ASSERT_TRUE(tempDir.isValid());
+    SidecarDatabase db(tempDir.filePath(QStringLiteral("music-sync-dj.sqlite")));
+    ASSERT_TRUE(db.open());
+    ASSERT_TRUE(db.applyMigrations());
+    OverrideRepository repo(db.database());
+
+    PairKey forceOn{1, 2};
+    TransitionOverride on;
+    on.forceBeatSync = true;
+    ASSERT_TRUE(repo.save(forceOn, on));
+    PairKey forceOff{3, 4};
+    TransitionOverride off;
+    off.forceBeatSync = false;
+    ASSERT_TRUE(repo.save(forceOff, off));
+
+    const auto loaded = repo.loadAll();
+    ASSERT_TRUE(loaded.value(forceOn).forceBeatSync.has_value());
+    EXPECT_TRUE(*loaded.value(forceOn).forceBeatSync);
+    ASSERT_TRUE(loaded.value(forceOff).forceBeatSync.has_value());
+    EXPECT_FALSE(*loaded.value(forceOff).forceBeatSync);
+    // A pair never touched stays unset (automatic).
+    EXPECT_FALSE(loaded.value(PairKey{5, 6}).forceBeatSync.has_value());
+}
+
 TEST(MusicSyncOverrideRepositoryTest, EitherFieldAloneIsAValidChoice) {
     // "Bass Swap, you pick the length" and "however you like, but 64 bars" are
     // both real answers, so each field is independently optional.
