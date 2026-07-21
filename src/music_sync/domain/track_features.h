@@ -104,6 +104,8 @@ struct TrackFeatures {
     // --- Fase 3: advanced analysis, derived from the Mixxx waveform + tempo ---
     double overallEnergy = 0.0;    // mean energy 0..1, comparable across tracks
     QVector<float> energyCurve;    // per-track normalized energy (0..1)
+    // --- Fase 9: refined by the optional Python worker (0 = not measured) ---
+    double vocalDensity = 0.0;     // share of energy in the voice band (0..1)
     QVector<float> bassCurve;      // per-track normalized bass presence (0..1)
     QVector<PhraseMarker> phrases; // heuristic phrase boundaries
     QVector<Section> sections;     // heuristic structural sections

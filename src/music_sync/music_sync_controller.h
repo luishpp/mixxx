@@ -24,6 +24,7 @@ namespace mixxx::music_sync {
 class SidecarDatabase;
 class PreviewExecutor;
 class SetExecutor;
+class WorkerClient;
 
 /// Entry point / lifecycle owner of the Music Sync module. It opens the sidecar
 /// database, runs migrations, reads native track analysis from the Mixxx
@@ -82,6 +83,18 @@ class MusicSyncController : public QObject {
     bool isAnalyzing() const {
         return static_cast<bool>(m_pScheduler);
     }
+
+    // --- Fase 9: optional Python analysis worker ---
+
+    /// Whether the external worker can run (Python present and the script found).
+    /// When false the module stays on its C++ heuristics (spec rule 15).
+    bool isWorkerAvailable() const;
+
+    /// Refines up to `limit` analyzed snapshots with the worker (richer energy +
+    /// vocal density), updating the sidecar as results stream in. Returns the
+    /// number sent, 0 if there is nothing to refine, or -1 if the worker is
+    /// unavailable. Progress via workerProgress()/workerFinished()/workerFailed().
+    int refineWithWorker(int limit);
 
     // --- Fase 6: two-deck transition preview ---
 
@@ -147,6 +160,9 @@ class MusicSyncController : public QObject {
   signals:
     void analysisProgress(int currentTrackNumber, int totalTracks);
     void analysisFinished();
+    void workerProgress(int done, int total);
+    void workerFinished(int refined);
+    void workerFailed(const QString& message);
     void previewStateChanged(int state, const QString& message);
     void setStateChanged(int state, const QString& message);
     void setPositionChanged(int position, const QString& what);
@@ -168,6 +184,11 @@ class MusicSyncController : public QObject {
     TrackAnalysisScheduler::Pointer m_pScheduler;
     std::unique_ptr<PreviewExecutor> m_pPreviewExecutor;
     std::unique_ptr<SetExecutor> m_pSetExecutor;
+
+    QString workerPythonExe() const;
+    QString workerScriptPath() const;
+    std::unique_ptr<WorkerClient> m_pWorkerClient;
+    QHash<std::int64_t, TrackFeatures> m_workerTracks; // in-flight refinement
 
     bool m_sessionActive = false;
     bool m_recordingStartedByUs = false;

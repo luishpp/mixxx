@@ -36,6 +36,7 @@ class DlgMusicSync : public QDialog {
     void slotSnapshotLibrary();
     void slotClearSnapshots();
     void slotAnalyzeMissing();
+    void slotRefineWorker();
     void slotAnalysisProgress(int currentTrackNumber, int totalTracks);
     void slotAnalysisFinished();
     void slotGenerateSequence();
@@ -56,6 +57,7 @@ class DlgMusicSync : public QDialog {
     QPushButton* m_pSnapshotButton;
     QPushButton* m_pClearButton;
     QPushButton* m_pAnalyzeButton;
+    QPushButton* m_pWorkerButton;
     QPushButton* m_pGenerateButton;
     QTableWidget* m_pTable;
     QLabel* m_pSummaryLabel;

@@ -223,9 +223,30 @@ no Run set:
 - [x] **UI:** checkbox **Record the set** + status com o caminho ao terminar.
 - [x] **Testes:** writer (tracklist/JSON válido/parcial/formatClock). **ctest do módulo: 93/93.**
 
+## Fase 9 (início) — Worker Python opcional: energia melhor
+Escolhido pelo usuário como início da Fase 9 (pilar B), por ser **seguro** (roda offline, não toca
+decks/gravação/banco — §16) e atacar a fraqueza real que a consultoria achou: a energia nativa é
+espremida (escalada pelo máximo do waveform → 37 faixas em 0.18–0.33, spread 0.15).
+- [x] **`music-sync-ai/worker.py`** — decodifica via ffmpeg (imageio-ffmpeg) e devolve uma **energia
+  RMS espectral absoluta**, numa escala só para toda a biblioteca (amostra: 203–361, muito mais
+  separável → o normalizador percentil ranqueia melhor). Protocolo JSONL (§16.2): request por
+  arquivo, eventos no stdout, logs no stderr.
+- [x] **`WorkerClient` (C++/QProcess)** — parser **puro/testável** (`parseLine`), execução assíncrona
+  com sinais (progress/trackAnalyzed/finished/failed) e `isAvailable()`. Fallback total: sem Python,
+  o módulo segue nas heurísticas (regra 15).
+- [x] **Integração:** `refineWithWorker` escreve o request, roda o worker e faz upsert da energia por
+  faixa no sidecar (assim que cada resultado chega). Botão **Refine (AI worker)**, cinza quando o
+  worker não está disponível.
+- [x] **Honestidade:** tentei também **densidade vocal** (proxy de banda 300–3400 Hz + variabilidade),
+  mas **não discrimina** vocal de sintetizador melódico em eletrônica (testado: 0.46–0.53 pra todas).
+  Detecção vocal de verdade precisa de **modelo (ONNX)** — fica pra um próximo passo do worker. O
+  campo/coluna `vocal_density` (**migration v11**) fica como **hook** pronto pro modelo, não populado.
+- [x] **Testes:** parser (progresso/track/erro/done/fatal/lixo). **ctest do módulo: 97/97.**
+
 ## Próximas fases (roadmap)
-- **Fase 1 a 8** — ✅ concluídas (acima).
-- **Fase 9–10** — Worker Python opcional; Echo Out/loop-out; stems; LLM de intenção; render offline.
+- **Fase 1 a 8** — ✅ concluídas. **Fase 9** — iniciada (worker: energia).
+- **Fase 9 (resto)** — modelo de vocal/seções (ONNX) no worker; Echo Out / loop-out (tipos RF-009).
+- **Fase 10** — stems; LLM de intenção; render offline; timeline avançada.
 
 ## Decisões deliberadas (não são lacunas)
 - **Sem seleção por duração-alvo.** `generateSequences` usa **todas** as faixas analisadas; o

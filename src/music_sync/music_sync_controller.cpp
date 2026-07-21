@@ -3,6 +3,9 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlQuery>
 #include <QSqlRecord>
 #include <QTextStream>
@@ -23,6 +26,7 @@
 #include "music_sync/analysis/analysis_repository.h"
 #include "music_sync/analysis/native_analysis_adapter.h"
 #include "music_sync/analysis/override_repository.h"
+#include "music_sync/analysis/worker_client.h"
 #include "music_sync/planner/energy_normalizer.h"
 #include "music_sync/planner/preview_compiler.h"
 #include "music_sync/planner/sequence_optimizer.h"
@@ -600,6 +604,107 @@ void MusicSyncController::persistSession() {
 
 QString MusicSyncController::sessionReportDir() const {
     return QFileInfo(sidecarPath()).absolutePath() + QChar('/') + kSessionsSubdir;
+}
+
+// --- Fase 9: optional Python analysis worker ---
+
+QString MusicSyncController::workerPythonExe() const {
+    return m_pDatabase ? m_pDatabase->getSetting(
+                                 QStringLiteral("ai_worker_python"), QStringLiteral("python"))
+                       : QStringLiteral("python");
+}
+
+QString MusicSyncController::workerScriptPath() const {
+    // Default to the worker in this fork's tree; the DJ can point it elsewhere by
+    // storing "ai_worker_script" in the sidecar settings.
+    const QString fallback =
+            QStringLiteral("C:/dev/music-sync/music-sync-dj/music-sync-ai/worker.py");
+    return m_pDatabase
+            ? m_pDatabase->getSetting(QStringLiteral("ai_worker_script"), fallback)
+            : fallback;
+}
+
+bool MusicSyncController::isWorkerAvailable() const {
+    return WorkerClient::isAvailable(workerPythonExe(), workerScriptPath());
+}
+
+int MusicSyncController::refineWithWorker(int limit) {
+    if (!m_ready || !isWorkerAvailable()) {
+        return -1;
+    }
+    if (m_pWorkerClient && m_pWorkerClient->isRunning()) {
+        return 0; // already refining
+    }
+
+    const QVector<TrackFeatures> snapshots = loadSnapshots();
+    m_workerTracks.clear();
+    QJsonArray tracks;
+    for (const TrackFeatures& f : snapshots) {
+        if (m_workerTracks.size() >= limit) {
+            break;
+        }
+        if (!f.analyzed || f.location.isEmpty()) {
+            continue;
+        }
+        m_workerTracks.insert(f.mixxxTrackId, f);
+        QJsonObject o;
+        o[QStringLiteral("id")] = static_cast<double>(f.mixxxTrackId);
+        o[QStringLiteral("path")] = f.location;
+        tracks.append(o);
+    }
+    if (tracks.isEmpty()) {
+        return 0;
+    }
+
+    QJsonObject request;
+    request[QStringLiteral("tracks")] = tracks;
+    const QString requestPath =
+            QFileInfo(sidecarPath()).absolutePath() + QStringLiteral("/worker-request.json");
+    QFile reqFile(requestPath);
+    if (!reqFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        return -1;
+    }
+    reqFile.write(QJsonDocument(request).toJson(QJsonDocument::Compact));
+    reqFile.close();
+
+    if (!m_pWorkerClient) {
+        m_pWorkerClient = std::make_unique<WorkerClient>(this);
+        connect(m_pWorkerClient.get(),
+                &WorkerClient::progress,
+                this,
+                &MusicSyncController::workerProgress);
+        connect(m_pWorkerClient.get(),
+                &WorkerClient::failed,
+                this,
+                &MusicSyncController::workerFailed);
+        connect(m_pWorkerClient.get(),
+                &WorkerClient::finished,
+                this,
+                &MusicSyncController::workerFinished);
+        connect(m_pWorkerClient.get(),
+                &WorkerClient::trackAnalyzed,
+                this,
+                [this](std::int64_t trackId,
+                        double overallEnergy,
+                        const QVector<float>& energyCurve,
+                        double vocalDensity) {
+                    const auto it = m_workerTracks.find(trackId);
+                    if (it == m_workerTracks.end() || !m_pDatabase) {
+                        return;
+                    }
+                    // Overwrite the two things the worker measures better; the
+                    // curve is kept too when it comes back non-empty.
+                    it->overallEnergy = overallEnergy;
+                    it->vocalDensity = vocalDensity;
+                    if (!energyCurve.isEmpty()) {
+                        it->energyCurve = energyCurve;
+                    }
+                    AnalysisRepository(m_pDatabase->database()).upsert(*it);
+                });
+    }
+    kLogger.info() << "Refining" << m_workerTracks.size() << "tracks with the worker";
+    m_pWorkerClient->analyze(workerPythonExe(), workerScriptPath(), requestPath);
+    return m_workerTracks.size();
 }
 
 QHash<PairKey, TransitionOverride> MusicSyncController::loadOverrides() const {

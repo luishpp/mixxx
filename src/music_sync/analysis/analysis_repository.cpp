@@ -182,6 +182,7 @@ mixxx::music_sync::TrackFeatures readRow(const QSqlQuery& query) {
     f.analyzed = query.value(idx("analyzed")).toInt() != 0;
     f.analyzerVersion = query.value(idx("analyzer_version")).toString();
     f.overallEnergy = query.value(idx("overall_energy")).toDouble();
+    f.vocalDensity = query.value(idx("vocal_density")).toDouble();
     f.energyCurve = curveFromJson(query.value(idx("energy_curve")).toString());
     f.bassCurve = curveFromJson(query.value(idx("bass_curve")).toString());
     f.phrases = phrasesFromJson(query.value(idx("phrase_markers")).toString());
@@ -201,7 +202,7 @@ const QString kSelectColumns = QStringLiteral(
         "duration_ms, sample_rate, channels, bitrate_kbps, bpm, key_chromatic, "
         "key_text, camelot, replaygain_ratio, has_beatgrid, intro_start_ms, "
         "intro_end_ms, outro_start_ms, outro_end_ms, analyzed, analyzer_version, "
-        "overall_energy, energy_curve, bass_curve, phrase_markers, "
+        "overall_energy, vocal_density, energy_curve, bass_curve, phrase_markers, "
         "advanced_analyzer_version, sections, entry_windows, exit_windows, "
         "act, set_function, track_number, snapshot_at");
 } // anonymous namespace
@@ -220,7 +221,7 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
             "  duration_ms, sample_rate, channels, bitrate_kbps, bpm, key_chromatic,"
             "  key_text, camelot, replaygain_ratio, has_beatgrid, intro_start_ms,"
             "  intro_end_ms, outro_start_ms, outro_end_ms, analyzed, analyzer_version,"
-            "  overall_energy, energy_curve, bass_curve, phrase_markers,"
+            "  overall_energy, vocal_density, energy_curve, bass_curve, phrase_markers,"
             "  advanced_analyzer_version, sections, entry_windows, exit_windows,"
             "  act, set_function, track_number, snapshot_at) "
             "VALUES ("
@@ -228,7 +229,7 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
             "  :duration_ms, :sample_rate, :channels, :bitrate_kbps, :bpm, :key_chromatic,"
             "  :key_text, :camelot, :replaygain_ratio, :has_beatgrid, :intro_start_ms,"
             "  :intro_end_ms, :outro_start_ms, :outro_end_ms, :analyzed, :analyzer_version,"
-            "  :overall_energy, :energy_curve, :bass_curve, :phrase_markers,"
+            "  :overall_energy, :vocal_density, :energy_curve, :bass_curve, :phrase_markers,"
             "  :advanced_analyzer_version, :sections, :entry_windows, :exit_windows,"
             "  :act, :set_function, :track_number, datetime('now')) "
             "ON CONFLICT(mixxx_track_id) DO UPDATE SET "
@@ -242,7 +243,8 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
             "  intro_end_ms=excluded.intro_end_ms, outro_start_ms=excluded.outro_start_ms,"
             "  outro_end_ms=excluded.outro_end_ms, analyzed=excluded.analyzed,"
             "  analyzer_version=excluded.analyzer_version,"
-            "  overall_energy=excluded.overall_energy, energy_curve=excluded.energy_curve,"
+            "  overall_energy=excluded.overall_energy, vocal_density=excluded.vocal_density,"
+            "  energy_curve=excluded.energy_curve,"
             "  bass_curve=excluded.bass_curve, phrase_markers=excluded.phrase_markers,"
             "  advanced_analyzer_version=excluded.advanced_analyzer_version,"
             "  sections=excluded.sections, entry_windows=excluded.entry_windows,"
@@ -274,6 +276,7 @@ bool AnalysisRepository::upsert(const TrackFeatures& f) {
     query.bindValue(QStringLiteral(":analyzed"), f.analyzed ? 1 : 0);
     query.bindValue(QStringLiteral(":analyzer_version"), f.analyzerVersion);
     query.bindValue(QStringLiteral(":overall_energy"), f.overallEnergy);
+    query.bindValue(QStringLiteral(":vocal_density"), f.vocalDensity);
     query.bindValue(QStringLiteral(":energy_curve"), curveToJson(f.energyCurve));
     query.bindValue(QStringLiteral(":bass_curve"), curveToJson(f.bassCurve));
     query.bindValue(QStringLiteral(":phrase_markers"), phrasesToJson(f.phrases));

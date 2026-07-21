@@ -75,6 +75,20 @@ Use para um **reset limpo** depois de refazer a biblioteca.
 > O painel **relê os snapshots sozinho ao abrir** e se atualiza depois de cada ação, então não existe
 > botão "recarregar" — reabrir já faz isso.
 
+### Refine (AI worker) — opcional
+
+Roda o **worker Python** (offline, nunca toca os decks) pra refinar a **energia** de cada faixa: uma
+medida espectral numa **escala só pra toda a biblioteca**. A energia nativa é escalada pelo máximo do
+waveform e espreme a música real numa faixa estreita (~0.18–0.33); a do worker separa muito mais, e o
+ranqueamento por energia (a coluna **Energy** e o *energy fit*) fica melhor.
+
+- O botão fica **cinza** se o Python ou o script (`music-sync-ai/worker.py`) não forem achados — o
+  módulo funciona 100% sem ele (regra 15). Configurável via settings `ai_worker_python` /
+  `ai_worker_script` no sidecar.
+- **Detecção de vocal ainda não:** um proxy espectral simples **não** distingue vocal de sintetizador
+  melódico em eletrônica (testei) — isso precisa de um **modelo (ONNX)**, que é o próximo passo do
+  worker. O campo já existe no banco, esperando o modelo.
+
 ---
 
 ## 🧭 A tabela da biblioteca

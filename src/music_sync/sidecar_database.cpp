@@ -137,6 +137,9 @@ bool SidecarDatabase::applyMigrations() {
         case 10:
             ok = migrateToV10();
             break;
+        case 11:
+            ok = migrateToV11();
+            break;
         default:
             kLogger.warning() << "No migration defined for version" << version;
             ok = false;
@@ -267,6 +270,13 @@ bool SidecarDatabase::migrateToV10() {
     return execStatement(m_database,
             QStringLiteral("ALTER TABLE MusicSyncTransitionOverrides "
                            "ADD COLUMN force_beat_sync INTEGER"));
+}
+
+bool SidecarDatabase::migrateToV11() {
+    // Vocal density (0..1) from the optional Python worker; 0 = not measured.
+    return execStatement(m_database,
+            QStringLiteral("ALTER TABLE MusicSyncTrackFeatures "
+                           "ADD COLUMN vocal_density REAL"));
 }
 
 bool SidecarDatabase::migrateToV8() {

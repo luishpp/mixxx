@@ -136,6 +136,7 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
           m_pSnapshotButton(nullptr),
           m_pClearButton(nullptr),
           m_pAnalyzeButton(nullptr),
+          m_pWorkerButton(nullptr),
           m_pGenerateButton(nullptr),
           m_pTable(nullptr),
           m_pSummaryLabel(nullptr) {
@@ -196,6 +197,15 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
     connect(m_pAnalyzeButton, &QPushButton::clicked, this, &DlgMusicSync::slotAnalyzeMissing);
     pActions->addWidget(m_pAnalyzeButton);
 
+    m_pWorkerButton = new QPushButton(tr("Refine (AI worker)"), this);
+    m_pWorkerButton->setToolTip(
+            tr("Runs the optional Python worker to refine the energy of every analyzed track "
+               "with a spectral measure on one scale across the library (the native heuristic "
+               "squeezes real music into a narrow band). Offline — it never touches the decks. "
+               "Grey when Python or the worker script is not found; the module works without it."));
+    connect(m_pWorkerButton, &QPushButton::clicked, this, &DlgMusicSync::slotRefineWorker);
+    pActions->addWidget(m_pWorkerButton);
+
     m_pGenerateButton = new QPushButton(tr("Generate sequence"), this);
     connect(m_pGenerateButton, &QPushButton::clicked, this, &DlgMusicSync::slotGenerateSequence);
     pActions->addWidget(m_pGenerateButton);
@@ -208,6 +218,21 @@ DlgMusicSync::DlgMusicSync(QWidget* pParent, std::shared_ptr<mixxx::CoreServices
             &MusicSyncController::analysisFinished,
             this,
             &DlgMusicSync::slotAnalysisFinished);
+    connect(m_pController,
+            &MusicSyncController::workerProgress,
+            this,
+            [this](int done, int total) {
+                m_pSummaryLabel->setText(tr("AI worker: %1/%2…").arg(done).arg(total));
+            });
+    connect(m_pController, &MusicSyncController::workerFinished, this, [this](int refined) {
+        setBusy(false);
+        populateTable(m_pController->loadSnapshots());
+        m_pSummaryLabel->setText(tr("AI worker refined %1 track(s).").arg(refined));
+    });
+    connect(m_pController, &MusicSyncController::workerFailed, this, [this](const QString& msg) {
+        setBusy(false);
+        m_pSummaryLabel->setText(tr("AI worker: %1").arg(msg));
+    });
 
     m_pSummaryLabel = new QLabel(this);
     pActions->addWidget(m_pSummaryLabel);
@@ -250,6 +275,8 @@ void DlgMusicSync::updateActionsEnabled() {
     m_pSnapshotButton->setEnabled(enabled);
     m_pClearButton->setEnabled(enabled);
     m_pAnalyzeButton->setEnabled(enabled);
+    // The worker is optional: only offer it when Python and the script are found.
+    m_pWorkerButton->setEnabled(enabled && m_pController->isWorkerAvailable());
     m_pGenerateButton->setEnabled(enabled);
     // The switch itself stays usable unless the sidecar failed or work is running.
     m_pEnabledCheckBox->setEnabled(m_ready && !m_busy);
@@ -317,6 +344,20 @@ void DlgMusicSync::slotAnalysisProgress(int currentTrackNumber, int totalTracks)
 void DlgMusicSync::slotAnalysisFinished() {
     setBusy(false);
     populateTable(m_pController->loadSnapshots());
+}
+
+void DlgMusicSync::slotRefineWorker() {
+    setBusy(true);
+    const int sent = m_pController->refineWithWorker(kSnapshotLimit);
+    if (sent < 0) {
+        setBusy(false);
+        m_pSummaryLabel->setText(tr("AI worker unavailable — check Python and the worker script."));
+    } else if (sent == 0) {
+        setBusy(false);
+        m_pSummaryLabel->setText(tr("Nothing to refine — snapshot the library first."));
+    } else {
+        m_pSummaryLabel->setText(tr("AI worker refining %1 track(s)…").arg(sent));
+    }
 }
 
 void DlgMusicSync::slotGenerateSequence() {

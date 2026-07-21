@@ -3971,6 +3971,7 @@ if(MUSIC_SYNC_ENABLED)
     src/music_sync/analysis/analysis_repository.cpp
     src/music_sync/analysis/override_repository.h
     src/music_sync/analysis/override_repository.cpp
+    src/music_sync/analysis/worker_client.cpp
     src/music_sync/analysis/advanced_analysis_adapter.h
     src/music_sync/analysis/advanced_analysis_adapter.cpp
     src/music_sync/planner/harmonic_compatibility.h
@@ -4015,6 +4016,7 @@ if(MUSIC_SYNC_ENABLED)
       src/test/music_sync_preview_test.cpp
       src/test/music_sync_set_test.cpp
       src/test/music_sync_report_test.cpp
+      src/test/music_sync_worker_test.cpp
     )
     # Register with ctest here: the main gtest_add_tests() call runs before this
     # block, so it would not see a source added afterwards.
@@ -4028,6 +4030,7 @@ if(MUSIC_SYNC_ENABLED)
         src/test/music_sync_preview_test.cpp
         src/test/music_sync_set_test.cpp
         src/test/music_sync_report_test.cpp
+        src/test/music_sync_worker_test.cpp
       EXTRA_ARGS --logLevel info
       WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
       TEST_LIST musicSyncTestsuite
