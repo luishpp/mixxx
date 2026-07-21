@@ -164,6 +164,7 @@ void SetExecutor::onTick() {
             pLive->setVolume(1.0);
             pLive->setEqLow(1.0);
             pLive->setPlaying(true);
+            emit trackLive(m_current, pLive->bpm()); // opener; later tracks in finishTransition
             return;
         }
         if (m_current >= m_program.transitions.size()) {
@@ -278,6 +279,7 @@ void SetExecutor::beginTransition() {
     kLogger.info() << "Transition" << (m_current + 1) << "->" << (m_current + 2)
                    << transitionTypeName(program.type) << "beats=" << program.durationBeats
                    << "sync=" << program.needsBeatSync();
+    emit transitionBegan(m_current);
     setState(State::Transitioning,
             QStringLiteral("Transition %1 -> %2 (%3)")
                     .arg(m_current + 1)
@@ -321,6 +323,7 @@ void SetExecutor::finishTransition() {
         }
     }
     const SetItem& item = m_program.items.at(m_current);
+    emit trackLive(m_current, pLive ? pLive->bpm() : item.bpm); // entry ts + effective tempo
     emit positionChanged(m_current, QStringLiteral("%1 - %2").arg(item.artist, item.title));
     setState(State::Playing,
             QStringLiteral("Playing %1/%2: %3")

@@ -205,9 +205,26 @@ batidas**. Como o salto é 9,4% (> 8%), o `Automatic` não sincroniza. Faltava u
 - [x] **Testes**: planner força/proíbe o lock; repo faz round-trip tri-state; blend só com tipo de
   blend. **ctest do módulo: 89/89 verdes.**
 
+## Fase 8 — Gravação e relatórios ✅ (2026-07-20)
+O set agora é **executável e gravável de ponta a ponta** (RF-014/015). Marcando **Record the set**
+no Run set:
+- [x] **Gravação do master (RF-014):** o controller liga a gravação do Mixxx (`RecordingManager::
+  startRecording`) no início e desliga no fim — mas só desliga a que **ele** ligou. Lê o caminho do
+  WAV (`getRecordingLocation`).
+- [x] **Captura ao vivo:** novos sinais `SetExecutor::trackLive(pos, bpm)` e `transitionBegan(from)`,
+  cravados contra um `QElapsedTimer` iniciado com a gravação → timestamp de entrada de cada faixa e de
+  cada virada, BPM efetivo (o da deck, já beatmatched), tipo/bars/beatSync da transição.
+- [x] **`SessionReport` (domínio puro) + `SessionReportWriter` (puro):** gera **`tracklist.txt`** e
+  **`session-report.json`** (RF-015: ordem, artista/título, timestamps, tipo, BPM, avisos, versões,
+  fingerprint = file size, caminho da gravação). Testável sem engine/FS.
+- [x] **Parcial/recuperação (RF-014/016):** o relatório é reescrito a cada evento
+  (`persistSession`), então fecha inesperado / Stop / crossfader deixam o parcial salvo, marcado
+  `completed=false`. Vai para `<sidecar>/music-sync-sessions/session-<data>.*`.
+- [x] **UI:** checkbox **Record the set** + status com o caminho ao terminar.
+- [x] **Testes:** writer (tracklist/JSON válido/parcial/formatClock). **ctest do módulo: 93/93.**
+
 ## Próximas fases (roadmap)
-- **Fase 1 a 7** — ✅ concluídas (acima).
-- **Fase 8** — Gravação e relatórios (WAV master via Mixxx, tracklist, session-report). **→ set de 35 faixas executável e gravável.**
+- **Fase 1 a 8** — ✅ concluídas (acima).
 - **Fase 9–10** — Worker Python opcional; Echo Out/loop-out; stems; LLM de intenção; render offline.
 
 ## Decisões deliberadas (não são lacunas)

@@ -4000,6 +4000,7 @@ if(MUSIC_SYNC_ENABLED)
     src/music_sync/preview/deck_adapter.cpp
     src/music_sync/preview/set_executor.h
     src/music_sync/preview/set_executor.cpp
+    src/music_sync/reporting/session_report_writer.cpp
     src/music_sync/music_sync_controller.h
     src/music_sync/music_sync_controller.cpp
     src/music_sync/dlg_music_sync.h
@@ -4013,6 +4014,7 @@ if(MUSIC_SYNC_ENABLED)
       src/test/music_sync_planner_test.cpp
       src/test/music_sync_preview_test.cpp
       src/test/music_sync_set_test.cpp
+      src/test/music_sync_report_test.cpp
     )
     # Register with ctest here: the main gtest_add_tests() call runs before this
     # block, so it would not see a source added afterwards.
@@ -4025,6 +4027,7 @@ if(MUSIC_SYNC_ENABLED)
         src/test/music_sync_planner_test.cpp
         src/test/music_sync_preview_test.cpp
         src/test/music_sync_set_test.cpp
+        src/test/music_sync_report_test.cpp
       EXTRA_ARGS --logLevel info
       WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
       TEST_LIST musicSyncTestsuite

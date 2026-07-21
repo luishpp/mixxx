@@ -240,6 +240,21 @@ Ensaiar a passagem do Ato 4 pro 5 sem isso exigiria rodar ~50 min até chegar l�
 **Controles:** Pause / Resume / Skip / Stop set. **Mexer no crossfader** → *Manual override* (devolve
 os decks). **Fechar a janela não para o set** — ele foi feito pra sobreviver à janela.
 
+### 🔴 Gravar o set (+ relatórios)
+
+Marque **☑ Record the set** antes do Run set. Aí o módulo:
+
+- **liga a gravação do master do Mixxx** (WAV, em tempo real) no começo e **desliga no fim**;
+- escreve, ao lado, um **`session-<data>.tracklist.txt`** (ordem, horário de entrada de cada faixa,
+  BPM efetivo, a virada que a trouxe) e um **`session-<data>.session-report.json`** (mesmos dados +
+  tipos de transição, avisos, versões, caminho da gravação);
+- **preserva parcial:** o relatório é reescrito a cada faixa/virada, então se o set for interrompido
+  (Stop, crossfader, falha) fica salvo o que rolou até ali, marcado como *partial*.
+
+Os relatórios vão para a pasta **`music-sync-sessions`** ao lado do sidecar
+(`%LOCALAPPDATA%\Mixxx\music-sync-sessions\`); o painel mostra o caminho ao terminar. O WAV vai pra
+pasta de gravações do Mixxx (Preferences → Recording).
+
 > 🎯 **A regra vale por faixa:** cada uma **começa no Enter @** dela e **entrega no Exit @** dela.
 > Única exceção: a **primeira faixa do que você roda** não tem ninguém entregando pra ela, então
 > começa na entrada automática (no set inteiro é a abertura; num ensaio de ato, a 1ª faixa do ato).

@@ -1,8 +1,11 @@
 #include "music_sync/music_sync_controller.h"
 
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QSqlQuery>
 #include <QSqlRecord>
+#include <QTextStream>
 #include <QThread>
 #include <QVariant>
 #include <algorithm>
@@ -27,8 +30,10 @@
 #include "music_sync/planner/transition_planner.h"
 #include "music_sync/preview/preview_executor.h"
 #include "music_sync/preview/set_executor.h"
+#include "music_sync/reporting/session_report_writer.h"
 #include "music_sync/sidecar_database.h"
 #include "preferences/usersettings.h"
+#include "recording/recordingmanager.h"
 #include "track/track.h"
 #include "track/trackid.h"
 #include "util/logger.h"
@@ -40,6 +45,11 @@ const mixxx::Logger kLogger("music_sync");
 
 const QString kSidecarFileName = QStringLiteral("music-sync-dj.sqlite");
 const QString kSettingModuleEnabled = QStringLiteral("module_enabled");
+
+// Stamped into every session report (spec RF-015).
+const QString kMusicSyncVersion = QStringLiteral("music-sync 0.8");
+const QString kMixxxBaseline = QStringLiteral("2.5.6");
+const QString kSessionsSubdir = QStringLiteral("music-sync-sessions");
 
 // A cold library track has no waveform summary in memory, so the advanced
 // analysis (energy/sections/transition windows) would come up empty. Load the
@@ -389,7 +399,8 @@ void MusicSyncController::cancelPreview() {
 bool MusicSyncController::runSet(const Arrangement& arrangement,
         const MixIntent& intent,
         int fromAct,
-        int toAct) {
+        int toAct,
+        bool record) {
     if (!m_pCoreServices || arrangement.items.isEmpty()) {
         return false;
     }
@@ -441,17 +452,154 @@ bool MusicSyncController::runSet(const Arrangement& arrangement,
     if (!m_pSetExecutor) {
         m_pSetExecutor = std::make_unique<SetExecutor>(pPlayerManager, this);
         connect(m_pSetExecutor.get(),
-                &SetExecutor::stateChanged,
-                this,
-                &MusicSyncController::setStateChanged);
-        connect(m_pSetExecutor.get(),
                 &SetExecutor::positionChanged,
                 this,
                 &MusicSyncController::setPositionChanged);
+        connect(m_pSetExecutor.get(),
+                &SetExecutor::trackLive,
+                this,
+                &MusicSyncController::onTrackLive);
+        connect(m_pSetExecutor.get(),
+                &SetExecutor::transitionBegan,
+                this,
+                &MusicSyncController::onTransitionBegan);
+        // State drives both the panel and the session's end. Do the session
+        // bookkeeping first, then forward to the panel.
+        connect(m_pSetExecutor.get(),
+                &SetExecutor::stateChanged,
+                this,
+                [this](int state, const QString& message) {
+                    using State = SetExecutor::State;
+                    if (state == static_cast<int>(State::Completed)) {
+                        finishSession(true);
+                    } else if (state == static_cast<int>(State::Cancelled) ||
+                            state == static_cast<int>(State::Failed) ||
+                            state == static_cast<int>(State::ManualOverride)) {
+                        finishSession(false);
+                    }
+                    emit setStateChanged(state, message);
+                });
     }
-    kLogger.info() << "Running set:" << program.explanation;
+    beginSession(program, record);
+    kLogger.info() << "Running set:" << program.explanation
+                   << (record ? "(recording)" : "");
     m_pSetExecutor->start(program, tracks);
     return true;
+}
+
+void MusicSyncController::beginSession(const SetProgram& program, bool record) {
+    m_sessionActive = true;
+    m_recordingStartedByUs = false;
+    m_sessionProgram = program;
+    m_sessionClock.start();
+
+    m_sessionReport = SessionReport();
+    m_sessionReport.musicSyncVersion = kMusicSyncVersion;
+    m_sessionReport.mixxxBaseline = kMixxxBaseline;
+    m_sessionReport.startedAt = QDateTime::currentDateTime();
+    for (const QString& w : program.warnings) {
+        m_sessionReport.warnings.append(w);
+    }
+    // Seed the tracklist from the program; timestamps fill in as tracks go live.
+    for (const SetItem& item : program.items) {
+        SessionTrack t;
+        t.position = item.position;
+        t.artist = item.artist;
+        t.title = item.title;
+        t.effectiveBpm = item.bpm;
+        m_sessionReport.tracks.append(t);
+    }
+
+    if (record && m_pCoreServices) {
+        const std::shared_ptr<RecordingManager> pRec = m_pCoreServices->getRecordingManager();
+        if (pRec) {
+            if (!pRec->isRecordingActive()) {
+                pRec->startRecording();
+                m_recordingStartedByUs = true;
+            }
+            m_sessionReport.recordingPath = pRec->getRecordingLocation();
+        }
+    }
+
+    const QString base = m_sessionReport.startedAt.toString(QStringLiteral("yyyyMMdd-HHmmss"));
+    m_sessionBasePath =
+            sessionReportDir() + QStringLiteral("/session-") + base;
+    persistSession(); // write an initial (empty-ish) report so a crash still leaves one
+}
+
+void MusicSyncController::onTrackLive(int position, double bpm) {
+    if (!m_sessionActive || position < 0 || position >= m_sessionReport.tracks.size()) {
+        return;
+    }
+    SessionTrack& t = m_sessionReport.tracks[position];
+    t.entryMs = m_sessionClock.elapsed();
+    if (bpm > 0.0) {
+        t.effectiveBpm = bpm;
+    }
+    m_sessionReport.durationMs = m_sessionClock.elapsed();
+    persistSession();
+}
+
+void MusicSyncController::onTransitionBegan(int fromPosition) {
+    if (!m_sessionActive || fromPosition < 0 ||
+            fromPosition >= m_sessionProgram.transitions.size()) {
+        return;
+    }
+    const PreviewProgram& p = m_sessionProgram.transitions.at(fromPosition).program;
+    SessionTransition t;
+    t.fromPosition = fromPosition;
+    t.atMs = m_sessionClock.elapsed();
+    t.type = transitionTypeName(p.type);
+    t.bars = static_cast<int>(p.durationBeats / 4.0);
+    t.beatSync = p.needsBeatSync();
+    m_sessionReport.transitions.append(t);
+    m_sessionReport.durationMs = m_sessionClock.elapsed();
+    persistSession();
+}
+
+void MusicSyncController::finishSession(bool completed) {
+    if (!m_sessionActive) {
+        return;
+    }
+    m_sessionActive = false;
+    m_sessionReport.durationMs = m_sessionClock.elapsed();
+    m_sessionReport.completed = completed;
+    if (!completed) {
+        m_sessionReport.warnings.append(
+                QStringLiteral("set ended before the last track (report is partial)"));
+    }
+    if (m_recordingStartedByUs && m_pCoreServices) {
+        const std::shared_ptr<RecordingManager> pRec = m_pCoreServices->getRecordingManager();
+        if (pRec && pRec->isRecordingActive()) {
+            pRec->stopRecording();
+        }
+    }
+    m_recordingStartedByUs = false;
+    persistSession();
+    emit sessionReportWritten(sessionReportDir(), completed);
+    kLogger.info() << "Session report written to" << m_sessionBasePath
+                   << (completed ? "(completed)" : "(partial)");
+}
+
+void MusicSyncController::persistSession() {
+    if (m_sessionBasePath.isEmpty()) {
+        return;
+    }
+    QDir().mkpath(sessionReportDir());
+    const auto write = [](const QString& path, const QString& text) {
+        QFile f(path);
+        if (f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+            QTextStream(&f) << text;
+        }
+    };
+    write(m_sessionBasePath + QStringLiteral(".tracklist.txt"),
+            SessionReportWriter::tracklistText(m_sessionReport));
+    write(m_sessionBasePath + QStringLiteral(".session-report.json"),
+            SessionReportWriter::jsonText(m_sessionReport));
+}
+
+QString MusicSyncController::sessionReportDir() const {
+    return QFileInfo(sidecarPath()).absolutePath() + QChar('/') + kSessionsSubdir;
 }
 
 QHash<PairKey, TransitionOverride> MusicSyncController::loadOverrides() const {

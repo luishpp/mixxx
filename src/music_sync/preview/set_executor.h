@@ -81,6 +81,12 @@ class SetExecutor : public QObject {
   signals:
     void stateChanged(int state, const QString& message);
     void positionChanged(int position, const QString& what);
+    /// The track at `position` just became the live one, playing at `bpm` (spec
+    /// RF-015: its entry timestamp and effective tempo). Fires for the opener and
+    /// after every completed handover.
+    void trackLive(int position, double bpm);
+    /// The handover out of `fromPosition` just started (its transition timestamp).
+    void transitionBegan(int fromPosition);
 
   private slots:
     void onTick();

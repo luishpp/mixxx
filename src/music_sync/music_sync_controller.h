@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QDateTime>
+#include <QElapsedTimer>
 #include <QObject>
 #include <QString>
 #include <QVector>
@@ -9,6 +11,8 @@
 #include "music_sync/domain/arrangement.h"
 #include "music_sync/domain/mix_intent.h"
 #include "music_sync/analysis/override_repository.h"
+#include "music_sync/domain/session_report.h"
+#include "music_sync/domain/set_program.h"
 #include "music_sync/domain/track_features.h"
 
 namespace mixxx {
@@ -103,7 +107,12 @@ class MusicSyncController : public QObject {
     bool runSet(const Arrangement& arrangement,
             const MixIntent& intent,
             int fromAct = 0,
-            int toAct = 0);
+            int toAct = 0,
+            bool record = false);
+
+    /// Where session reports (tracklist + JSON) are written: a folder next to the
+    /// sidecar. Shown in the panel so the DJ can find them.
+    QString sessionReportDir() const;
 
     // --- RF-010: per-pair transition editing ---
 
@@ -141,14 +150,31 @@ class MusicSyncController : public QObject {
     void previewStateChanged(int state, const QString& message);
     void setStateChanged(int state, const QString& message);
     void setPositionChanged(int position, const QString& what);
+    /// A recorded session's reports were written (spec RF-015). `dir` is the
+    /// folder; empty `dir` means nothing was written.
+    void sessionReportWritten(const QString& dir, bool completed);
 
   private:
+    // --- Fase 8: recording + session report ---
+    void beginSession(const SetProgram& program, bool record);
+    void onTrackLive(int position, double bpm);
+    void onTransitionBegan(int fromPosition);
+    void finishSession(bool completed);
+    void persistSession(); // writes the current report to disk (recovery-safe)
+
     std::shared_ptr<mixxx::CoreServices> m_pCoreServices;
     std::unique_ptr<SidecarDatabase> m_pDatabase;
     bool m_ready;
     TrackAnalysisScheduler::Pointer m_pScheduler;
     std::unique_ptr<PreviewExecutor> m_pPreviewExecutor;
     std::unique_ptr<SetExecutor> m_pSetExecutor;
+
+    bool m_sessionActive = false;
+    bool m_recordingStartedByUs = false;
+    SetProgram m_sessionProgram;
+    SessionReport m_sessionReport;
+    QElapsedTimer m_sessionClock;
+    QString m_sessionBasePath; // <reportDir>/session-<timestamp>
 };
 
 } // namespace mixxx::music_sync

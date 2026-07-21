@@ -871,6 +871,11 @@ void DlgMusicSync::slotGenerateSequence() {
     }
     setRow->addWidget(scopeSelector);
 
+    auto* recordCheck = new QCheckBox(tr("Record the set"), &dialog);
+    recordCheck->setToolTip(
+            tr("Records the master to a WAV (Mixxx's own recorder) and writes a tracklist + "
+               "session report next to it when the set ends — even if it is interrupted."));
+    setRow->addWidget(recordCheck);
     auto* runSetButton = new QPushButton(tr("Run set"), &dialog);
     runSetButton->setToolTip(
             tr("Plays the whole sequence on the decks, handing over automatically."));
@@ -894,14 +899,27 @@ void DlgMusicSync::slotGenerateSequence() {
     connect(runSetButton,
             &QPushButton::clicked,
             &dialog,
-            [this, &best, intent, setStatus, scopeSelector]() {
+            [this, &best, intent, setStatus, scopeSelector, recordCheck]() {
                 const int scope = scopeSelector->currentData().toInt();
                 const int fromAct = scope / 100;
                 const int toAct = scope % 100;
-                if (!m_pController->runSet(best, intent, fromAct, toAct)) {
+                const bool record = recordCheck->isChecked();
+                if (!m_pController->runSet(best, intent, fromAct, toAct, record)) {
                     setStatus->setText(tr("Cannot run it — need two decks, every track in "
                                           "the library, and tracks in the chosen acts."));
+                } else if (record) {
+                    setStatus->setText(tr("Recording — the WAV and reports land in %1")
+                                               .arg(m_pController->sessionReportDir()));
                 }
+            });
+    connect(m_pController,
+            &MusicSyncController::sessionReportWritten,
+            &dialog,
+            [setStatus](const QString& dir, bool completed) {
+                setStatus->setText(
+                        (completed ? tr("Set complete — tracklist + report saved in %1")
+                                   : tr("Set ended early — partial tracklist + report saved in %1"))
+                                .arg(dir));
             });
     connect(pauseButton, &QPushButton::clicked, &dialog, [this]() {
         m_pController->pauseSet();
